@@ -25,15 +25,19 @@ class BandwidthDetector {
   getOptimizedSettings() {
     if (this.isSlowConnection) {
       return {
-        videoWidth: 540,
-        videoHeight: 960,
+        cameraWidth: 1280,
+        cameraHeight: 720,
+        videoWidth: 480,
+        videoHeight: 270,
         fps: 15,
         bitrate: 300000
       };
     }
     return {
-      videoWidth: 1080,
-      videoHeight: 1920,
+      cameraWidth: 1920,
+      cameraHeight: 1080,
+      videoWidth: 640,
+      videoHeight: 360,
       fps: 24,
       bitrate: 1000000
     };
@@ -202,8 +206,8 @@ async function startCamera() {
   const constraints = {
     video: {
       facingMode: usingFrontCamera ? 'user' : 'environment',
-      width: { ideal: settings.videoWidth },
-      height: { ideal: settings.videoHeight }
+      width: { ideal: settings.cameraWidth },
+      height: { ideal: settings.cameraHeight }
     },
     audio: true
   };
@@ -336,7 +340,7 @@ captureBtn.onclick = () => {
     ctx.drawImage(overlay, 0, 0, width, height);
 
     const quality = bandwidthDetector.getPhotoCompression();
-    const dataUrl = canvas.toDataURL('image/jpeg', quality);
+    const dataUrl = canvas.toDataURL('image/png', quality);
 
     photoPreview.src = dataUrl;
     previewContainer.style.display = 'flex';
@@ -349,7 +353,7 @@ captureBtn.onclick = () => {
 
 saveBtn.onclick = () => {
   const link = document.createElement('a');
-  link.download = 'foto-moldura.jpg';
+  link.download = 'foto-moldura.png';
   link.href = photoPreview.src;
   link.click();
 
@@ -402,14 +406,14 @@ function startVideoRecording() {
     const settings = track.getSettings();
     const optimizedSettings = bandwidthDetector.getOptimizedSettings();
 
-    // Usar resolução 1080x1920 (Full HD portrait)
-    const canvasWidth = optimizedSettings.videoWidth;
-    const canvasHeight = optimizedSettings.videoHeight;
+    // Usar resolução otimizada 640x360 (proporcional)
+    const targetWidth = optimizedSettings.videoWidth;
+    const targetHeight = optimizedSettings.videoHeight;
 
-    console.log('Dimensões do vídeo (Full HD portrait):', canvasWidth, 'x', canvasHeight);
+    console.log('Dimensões do vídeo:', targetWidth, 'x', targetHeight);
 
-    recordingCanvas.width = canvasWidth;
-    recordingCanvas.height = canvasHeight;
+    recordingCanvas.width = targetWidth;
+    recordingCanvas.height = targetHeight;
     const rctx = recordingCanvas.getContext('2d', { willReadFrequently: false });
 
     isRecording = true;
@@ -421,8 +425,8 @@ function startVideoRecording() {
     const frameDelay = 1000 / fps;
     let lastFrameTime = Date.now();
 
-    const camWidth = settings.width || 640;
-    const camHeight = settings.height || 480;
+    const camWidth = settings.width || 1920;
+    const camHeight = settings.height || 1080;
 
     function drawFrame() {
       const now = Date.now();
@@ -440,42 +444,19 @@ function startVideoRecording() {
       }
 
       try {
-        // Preencher canvas com preto (letterbox)
-        rctx.fillStyle = '#000000';
-        rctx.fillRect(0, 0, canvasWidth, canvasHeight);
-
-        // Calcular dimensões para manter proporção sem zoom
-        const canvasAspect = canvasWidth / canvasHeight;
-        const camAspect = camWidth / camHeight;
-        
-        let drawWidth, drawHeight, drawX, drawY;
-
-        if (camAspect > canvasAspect) {
-          // Câmera mais larga - letterbox top/bottom
-          drawWidth = canvasWidth;
-          drawHeight = canvasWidth / camAspect;
-          drawX = 0;
-          drawY = (canvasHeight - drawHeight) / 2;
-        } else {
-          // Câmera mais alta - letterbox left/right
-          drawHeight = canvasHeight;
-          drawWidth = canvasHeight * camAspect;
-          drawX = (canvasWidth - drawWidth) / 2;
-          drawY = 0;
-        }
+        rctx.clearRect(0, 0, targetWidth, targetHeight);
 
         if (usingFrontCamera) {
           rctx.save();
-          rctx.translate(canvasWidth / 2, canvasHeight / 2);
+          rctx.translate(targetWidth, 0);
           rctx.scale(-1, 1);
-          rctx.translate(-canvasWidth / 2, -canvasHeight / 2);
-          rctx.drawImage(video, drawX, drawY, drawWidth, drawHeight);
+          rctx.drawImage(video, 0, 0, targetWidth, targetHeight);
           rctx.restore();
         } else {
-          rctx.drawImage(video, drawX, drawY, drawWidth, drawHeight);
+          rctx.drawImage(video, 0, 0, targetWidth, targetHeight);
         }
 
-        rctx.drawImage(overlay, 0, 0, canvasWidth, canvasHeight);
+        rctx.drawImage(overlay, 0, 0, targetWidth, targetHeight);
       } catch (err) {
         console.warn('Erro ao desenhar frame:', err);
       }
