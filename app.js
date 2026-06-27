@@ -146,6 +146,7 @@ let recordTimerInterval = null;
 let recordedMimeType = 'video/webm';
 let lastVideoUrl = null;
 let frameInterval = null;
+let isChangingCamera = false;
 
 const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 const API_URL = "https://video-converter-api-production-bb8e.up.railway.app/convert";
@@ -209,7 +210,16 @@ async function startCamera() {
 
   try {
     console.log('Solicitando acesso à câmera...', constraints);
-    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    
+    // Timeout de 10 segundos para evitar travamento
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Timeout ao acessar câmera')), 10000)
+    );
+    
+    stream = await Promise.race([
+      navigator.mediaDevices.getUserMedia(constraints),
+      timeoutPromise
+    ]);
     
     console.log('✅ Câmera iniciada com sucesso!');
     console.log('Usando câmera:', usingFrontCamera ? 'Frontal' : 'Traseira');
@@ -217,9 +227,11 @@ async function startCamera() {
     video.srcObject = stream;
     video.style.transform = usingFrontCamera ? 'scaleX(-1)' : 'scaleX(1)';
     overlay.style.transform = 'scaleX(1)';
+    video.style.background = 'transparent';
     
     // Esconder mensagem de erro
     document.getElementById('error-message').style.display = 'none';
+    isChangingCamera = false;
     
   } catch (err) {
     console.error('❌ Erro ao acessar câmera:', err);
@@ -229,27 +241,67 @@ async function startCamera() {
     if (err.name === 'NotAllowedError') {
       errorMsg = '⚠️ PERMISSÃO NEGADA\n\nVocê negou acesso à câmera. Verifique as permissões do navegador e recarregue a página.';
     } else if (err.name === 'NotFoundError') {
-      errorMsg = '⚠️ CÂMERA NÃO ENCONTRADA\n\nNenhuma câmera foi detectada no dispositivo. Verifique se o dispositivo tem câmera.';
+      errorMsg = '⚠️ CÂMERA NÃO ENCONTRADA\n\nNenhuma câmera traseira foi detectada. Usando câmera frontal.';
+      // Voltar para câmera frontal se traseira não existir
+      if (!usingFrontCamera) {
+        usingFrontCamera = true;
+        console.log('Revertendo para câmera frontal...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await startCamera();
+        return;
+      }
     } else if (err.name === 'NotReadableError') {
       errorMsg = '⚠️ CÂMERA OCUPADA\n\nOutra aplicação está usando a câmera. Feche outros apps e recarregue.';
     } else if (err.name === 'OverconstrainedError') {
-      errorMsg = '⚠️ CÂMERA INDISPONÍVEL\n\nO navegador não conseguiu acessar uma câmera com as configurações solicitadas. Tente recarregar.';
+      errorMsg = '⚠️ CÂMERA INDISPONÍVEL\n\nO navegador não conseguiu acessar uma câmera com as configurações. Tentando novamente...';
+      // Tentar novamente com restrições menores
+      if (!usingFrontCamera) {
+        usingFrontCamera = true;
+        console.log('Revertendo para câmera frontal...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await startCamera();
+        return;
+      }
+    } else if (err.message === 'Timeout ao acessar câmera') {
+      errorMsg = '⚠️ TIMEOUT\n\nA câmera demorou muito para responder. Tentando novamente...';
+      if (!usingFrontCamera) {
+        usingFrontCamera = true;
+        console.log('Timeout na câmera traseira. Voltando para frontal...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await startCamera();
+        return;
+      }
     } else {
       errorMsg = `⚠️ ERRO NA CÂMERA\n\n${err.message || 'Erro desconhecido ao acessar a câmera.'}`;
     }
     
     showError('Erro ao acessar câmera', errorMsg);
+    isChangingCamera = false;
   }
 }
 
-switchCameraBtn.onclick = () => {
+switchCameraBtn.onclick = async () => {
+  if (isChangingCamera) {
+    console.log('Já está trocando de câmera...');
+    return;
+  }
+
   if (!stream) {
     showError('Erro', 'Câmera não está ativa. Recarregue a página.');
     return;
   }
+
+  isChangingCamera = true;
+  setButtonsDisabledDuringProcess(true);
+  showLoading();
+  
   usingFrontCamera = !usingFrontCamera;
   console.log('Trocando câmera para:', usingFrontCamera ? 'Frontal' : 'Traseira');
-  startCamera();
+  
+  await startCamera();
+  
+  hideLoading();
+  setButtonsDisabledDuringProcess(false);
 };
 
 // ===== FOTO =====
