@@ -407,6 +407,14 @@ function startVideoRecording() {
 
     recordingCanvas.width = width;
     recordingCanvas.height = height;
+    
+    // Criar overlay redimensionado com as mesmas proporções do vídeo
+    const overlayResized = document.createElement('canvas');
+    overlayResized.width = width;
+    overlayResized.height = height;
+    const overlayCtx = overlayResized.getContext('2d');
+    overlayCtx.drawImage(overlay, 0, 0, width, height);
+
     const rctx = recordingCanvas.getContext('2d', { willReadFrequently: false });
 
     isRecording = true;
@@ -441,7 +449,6 @@ function startVideoRecording() {
         rctx.fillRect(0, 0, width, height);
 
         // Desenhar vídeo sem zoom, usando escala baseada em FIT (sem corte)
-        // Calcula quanto da câmera cabe no canvas sem ser cortado
         const camWidth = settings.width || 640;
         const camHeight = settings.height || 480;
         
@@ -466,7 +473,8 @@ function startVideoRecording() {
           rctx.drawImage(video, offsetX, offsetY, displayWidth, displayHeight);
         }
 
-        rctx.drawImage(overlay, 0, 0, width, height);
+        // Desenhar moldura com as mesmas proporções
+        rctx.drawImage(overlayResized, 0, 0, width, height);
       } catch (err) {
         console.warn('Erro ao desenhar frame:', err);
       }
