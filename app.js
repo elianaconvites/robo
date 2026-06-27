@@ -197,19 +197,15 @@ async function startCamera() {
     stream.getTracks().forEach(track => track.stop());
   }
   
-  const settings = bandwidthDetector.getOptimizedSettings();
-  
   const constraints = {
     video: {
-      facingMode: usingFrontCamera ? 'user' : 'environment',
-      width: { ideal: settings.videoWidth },
-      height: { ideal: settings.videoHeight }
+      facingMode: usingFrontCamera ? 'user' : 'environment'
     },
     audio: true
   };
 
   try {
-    console.log('Solicitando acesso à câmera...', constraints);
+    console.log('Solicitando acesso à câmera...');
     
     // Timeout de 10 segundos para evitar travamento
     const timeoutPromise = new Promise((_, reject) => 
@@ -406,7 +402,8 @@ function startVideoRecording() {
     const width = optimizedSettings.videoWidth;
     const height = optimizedSettings.videoHeight;
 
-    console.log('Dimensões do vídeo (Full HD portrait SEM ZOOM):', width, 'x', height);
+    console.log('Dimensões do vídeo final:', width, 'x', height);
+    console.log('Dimensões da câmera:', settings.width, 'x', settings.height);
 
     recordingCanvas.width = width;
     recordingCanvas.height = height;
@@ -420,9 +417,6 @@ function startVideoRecording() {
     const fps = optimizedSettings.fps;
     const frameDelay = 1000 / fps;
     let lastFrameTime = Date.now();
-
-    const camWidth = settings.width || 640;
-    const camHeight = settings.height || 480;
 
     function drawFrame() {
       const now = Date.now();
@@ -442,26 +436,34 @@ function startVideoRecording() {
       try {
         rctx.clearRect(0, 0, width, height);
 
-        // Calcular escala SEM ZOOM - usar o menor dos dois para não cortar
-        const scale = Math.min(width / camWidth, height / camHeight);
-        const scaledWidth = camWidth * scale;
-        const scaledHeight = camHeight * scale;
-        const offsetX = (width - scaledWidth) / 2;
-        const offsetY = (height - scaledHeight) / 2;
-
-        // Preencher com cor preta o espaço vazio (letterbox)
+        // Preencher com cor preta
         rctx.fillStyle = '#000000';
         rctx.fillRect(0, 0, width, height);
 
+        // Desenhar vídeo sem zoom, usando escala baseada em FIT (sem corte)
+        // Calcula quanto da câmera cabe no canvas sem ser cortado
+        const camWidth = settings.width || 640;
+        const camHeight = settings.height || 480;
+        
+        // Scale baseado em FIT (cabe tudo sem corte)
+        const scaleX = width / camWidth;
+        const scaleY = height / camHeight;
+        const scale = Math.min(scaleX, scaleY);
+        
+        const displayWidth = camWidth * scale;
+        const displayHeight = camHeight * scale;
+        const offsetX = (width - displayWidth) / 2;
+        const offsetY = (height - displayHeight) / 2;
+
         if (usingFrontCamera) {
           rctx.save();
-          rctx.translate(width / 2, height / 2);
+          rctx.translate(offsetX + displayWidth / 2, offsetY + displayHeight / 2);
           rctx.scale(-1, 1);
-          rctx.translate(-width / 2, -height / 2);
-          rctx.drawImage(video, offsetX, offsetY, scaledWidth, scaledHeight);
+          rctx.translate(-(displayWidth / 2), -(displayHeight / 2));
+          rctx.drawImage(video, 0, 0, displayWidth, displayHeight);
           rctx.restore();
         } else {
-          rctx.drawImage(video, offsetX, offsetY, scaledWidth, scaledHeight);
+          rctx.drawImage(video, offsetX, offsetY, displayWidth, displayHeight);
         }
 
         rctx.drawImage(overlay, 0, 0, width, height);
