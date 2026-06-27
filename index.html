@@ -30,6 +30,7 @@
       width: 100vw;
       height: 100vh;
       object-fit: cover;
+      background: #000;
     }
 
     #overlay {
@@ -40,6 +41,31 @@
       margin: auto;
       object-fit: contain;
       pointer-events: none;
+      opacity: 0.9;
+    }
+
+    #error-message {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255, 0, 0, 0.9);
+      color: white;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      z-index: 100;
+      display: none;
+      max-width: 80%;
+    }
+
+    #error-message h3 {
+      margin-bottom: 10px;
+    }
+
+    #error-message p {
+      font-size: 14px;
+      line-height: 1.5;
     }
 
     /* Indicador de modo noturno */
@@ -281,8 +307,9 @@
   </style>
 </head>
 <body class="dark-mode">
+  <div id="error-message"></div>
   <video id="video" autoplay muted playsinline></video>
-  <img id="overlay" src="moldura.png" alt="Moldura" />
+  <img id="overlay" src="moldura.png" alt="Moldura" onerror="console.warn('moldura.png não encontrada')" />
 
   <button id="theme-toggle" title="Alternar modo noturno">🌙</button>
   <div id="bandwidth-warning">⚠️ Conexão lenta detectada</div>
