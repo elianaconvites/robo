@@ -101,6 +101,14 @@ class ThemeManager {
   }
 }
 
+// ===== MOSTRAR ERRO =====
+function showError(title, message) {
+  const errorDiv = document.getElementById('error-message');
+  errorDiv.innerHTML = `<h3>${title}</h3><p>${message}</p>`;
+  errorDiv.style.display = 'block';
+  console.error(`${title}: ${message}`);
+}
+
 // ===== APLICATIVO PRINCIPAL =====
 const bandwidthDetector = new BandwidthDetector();
 const themeManager = new ThemeManager();
@@ -173,6 +181,8 @@ function stopAllRecording() {
 
 // ===== CÂMERA =====
 async function startCamera() {
+  console.log('Iniciando câmera...');
+  
   // Parar gravação se estiver ativa
   if (isRecording) {
     stopAllRecording();
@@ -198,18 +208,45 @@ async function startCamera() {
   };
 
   try {
+    console.log('Solicitando acesso à câmera...', constraints);
     stream = await navigator.mediaDevices.getUserMedia(constraints);
+    
+    console.log('✅ Câmera iniciada com sucesso!');
+    console.log('Usando câmera:', usingFrontCamera ? 'Frontal' : 'Traseira');
+    
     video.srcObject = stream;
     video.style.transform = usingFrontCamera ? 'scaleX(-1)' : 'scaleX(1)';
     overlay.style.transform = 'scaleX(1)';
-    console.log('Câmera iniciada - Frontal:', usingFrontCamera);
+    
+    // Esconder mensagem de erro
+    document.getElementById('error-message').style.display = 'none';
+    
   } catch (err) {
-    console.error('Erro ao acessar câmera:', err);
-    alert('Não foi possível acessar a câmera. Verifique as permissões.');
+    console.error('❌ Erro ao acessar câmera:', err);
+    
+    let errorMsg = '';
+    
+    if (err.name === 'NotAllowedError') {
+      errorMsg = '⚠️ PERMISSÃO NEGADA\n\nVocê negou acesso à câmera. Verifique as permissões do navegador e recarregue a página.';
+    } else if (err.name === 'NotFoundError') {
+      errorMsg = '⚠️ CÂMERA NÃO ENCONTRADA\n\nNenhuma câmera foi detectada no dispositivo. Verifique se o dispositivo tem câmera.';
+    } else if (err.name === 'NotReadableError') {
+      errorMsg = '⚠️ CÂMERA OCUPADA\n\nOutra aplicação está usando a câmera. Feche outros apps e recarregue.';
+    } else if (err.name === 'OverconstrainedError') {
+      errorMsg = '⚠️ CÂMERA INDISPONÍVEL\n\nO navegador não conseguiu acessar uma câmera com as configurações solicitadas. Tente recarregar.';
+    } else {
+      errorMsg = `⚠️ ERRO NA CÂMERA\n\n${err.message || 'Erro desconhecido ao acessar a câmera.'}`;
+    }
+    
+    showError('Erro ao acessar câmera', errorMsg);
   }
 }
 
 switchCameraBtn.onclick = () => {
+  if (!stream) {
+    showError('Erro', 'Câmera não está ativa. Recarregue a página.');
+    return;
+  }
   usingFrontCamera = !usingFrontCamera;
   console.log('Trocando câmera para:', usingFrontCamera ? 'Frontal' : 'Traseira');
   startCamera();
@@ -218,14 +255,14 @@ switchCameraBtn.onclick = () => {
 // ===== FOTO =====
 captureBtn.onclick = () => {
   if (!stream) {
-    alert('Câmera não iniciada. Recarregue a página.');
+    showError('Erro', 'Câmera não iniciada. Verifique as permissões e recarregue.');
     return;
   }
 
   try {
     const track = stream.getVideoTracks()[0];
     if (!track) {
-      alert('Nenhuma câmera disponível.');
+      showError('Erro', 'Nenhuma câmera disponível.');
       return;
     }
 
@@ -251,9 +288,10 @@ captureBtn.onclick = () => {
 
     photoPreview.src = dataUrl;
     previewContainer.style.display = 'flex';
+    console.log('✅ Foto capturada com sucesso!');
   } catch (err) {
     console.error('Erro ao tirar foto:', err);
-    alert('Erro ao tirar foto.');
+    showError('Erro', 'Erro ao tirar foto: ' + err.message);
   }
 };
 
@@ -298,14 +336,14 @@ function stopRecordingTimer() {
 
 function startVideoRecording() {
   if (!stream) {
-    alert('Câmera não iniciada.');
+    showError('Erro', 'Câmera não iniciada.');
     return;
   }
 
   try {
     const track = stream.getVideoTracks()[0];
     if (!track) {
-      alert('Nenhuma câmera disponível.');
+      showError('Erro', 'Nenhuma câmera disponível.');
       return;
     }
 
@@ -399,7 +437,7 @@ function startVideoRecording() {
       mediaRecorder = new MediaRecorder(combinedStream, options);
     } catch (e) {
       console.error('Erro ao iniciar MediaRecorder:', e);
-      alert('Este navegador não suporta gravação de vídeo com som.');
+      showError('Erro', 'Este navegador não suporta gravação de vídeo com som.');
       isRecording = false;
       stopRecordingTimer();
       if (frameInterval) cancelAnimationFrame(frameInterval);
@@ -427,7 +465,7 @@ function startVideoRecording() {
       const blob = new Blob(recordedChunks, { type: recordedMimeType });
 
       if (!blob || blob.size === 0) {
-        alert('Nenhum dado de vídeo foi gravado.');
+        showError('Erro', 'Nenhum dado de vídeo foi gravado.');
         startRecordBtn.style.display = 'inline-block';
         stopRecordBtn.style.display = 'none';
         recordedChunks = [];
@@ -449,7 +487,7 @@ function startVideoRecording() {
 
         if (!resposta.ok) {
           console.error('Erro na conversão no servidor');
-          alert('Ocorreu um erro ao converter o vídeo. Tente novamente.');
+          showError('Erro', 'Ocorreu um erro ao converter o vídeo. Tente novamente.');
         } else {
           const mp4Blob = await resposta.blob();
           const url = URL.createObjectURL(mp4Blob);
@@ -476,10 +514,11 @@ function startVideoRecording() {
           }
 
           URL.revokeObjectURL(url);
+          console.log('✅ Vídeo salvo com sucesso!');
         }
       } catch (err) {
         console.error('Erro ao enviar vídeo:', err);
-        alert('Erro ao enviar o vídeo para o servidor.');
+        showError('Erro', 'Erro ao enviar o vídeo para o servidor: ' + err.message);
       } finally {
         hideLoading();
         setButtonsDisabledDuringProcess(false);
@@ -494,9 +533,10 @@ function startVideoRecording() {
 
     startRecordBtn.style.display = 'none';
     stopRecordBtn.style.display = 'inline-block';
+    console.log('✅ Gravação iniciada!');
   } catch (err) {
     console.error('Erro ao iniciar gravação:', err);
-    alert('Erro ao iniciar gravação de vídeo.');
+    showError('Erro', 'Erro ao iniciar gravação de vídeo: ' + err.message);
   }
 }
 
@@ -532,4 +572,11 @@ saveVideoBtn.onclick = () => {
 };
 
 // Iniciar
+console.log('🤖 Robô iniciando...');
+console.log('Sistema:', {
+  browser: navigator.userAgent,
+  iOS: isiOS,
+  connection: navigator.connection?.effectiveType
+});
 startCamera();
+console.log('🤖 Robô iniciado!');
