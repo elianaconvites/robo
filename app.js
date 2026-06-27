@@ -25,15 +25,15 @@ class BandwidthDetector {
   getOptimizedSettings() {
     if (this.isSlowConnection) {
       return {
-        videoWidth: 480,
-        videoHeight: 360,
+        videoWidth: 360,
+        videoHeight: 480,
         fps: 15,
         bitrate: 300000
       };
     }
     return {
-      videoWidth: 960,
-      videoHeight: 720,
+      videoWidth: 720,
+      videoHeight: 960,
       fps: 24,
       bitrate: 1000000
     };
@@ -132,8 +132,6 @@ const recordingCanvas = document.getElementById('recordingCanvas');
 const videoPreviewContainer = document.getElementById('video-preview-container');
 const videoPreviewEl = document.getElementById('video-preview');
 const saveVideoBtn = document.getElementById('save-video-btn');
-const closeVideoBtn = document.getElementById('close-video-btn');
-const videoButtonsContainer = document.getElementById('video-buttons-container');
 const videoInstructions = document.getElementById('video-instructions');
 
 const loadingMessage = document.getElementById('loading-message');
@@ -151,11 +149,8 @@ let frameInterval = null;
 let isChangingCamera = false;
 
 const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-const isAndroid = /Android/i.test(navigator.userAgent);
 const API_URL = "https://video-converter-api-production-bb8e.up.railway.app/convert";
 const SECURITY_KEY = "EC-MOLDURA-2025-V1";
-
-console.log('🤖 Plataforma:', { isiOS, isAndroid, userAgent: navigator.userAgent });
 
 // ===== FUNÇÕES AUXILIARES =====
 function showLoading() {
@@ -185,9 +180,9 @@ function stopAllRecording() {
   stopRecordingTimer();
 }
 
-// ===== CÂMERA COM SUPORTE MELHORADO =====
+// ===== CÂMERA =====
 async function startCamera() {
-  console.log('🎥 Iniciando câmera...', { frontal: usingFrontCamera });
+  console.log('Iniciando câmera...');
   
   // Parar gravação se estiver ativa
   if (isRecording) {
@@ -204,113 +199,90 @@ async function startCamera() {
   
   const settings = bandwidthDetector.getOptimizedSettings();
   
-  // Tentar múltiplas estratégias de constraints
-  const constraintsList = [
-    // Estratégia 1: Com dimensões específicas
-    {
-      video: {
-        facingMode: usingFrontCamera ? 'user' : 'environment',
-        width: { ideal: settings.videoWidth },
-        height: { ideal: settings.videoHeight }
-      },
-      audio: true
+  const constraints = {
+    video: {
+      facingMode: usingFrontCamera ? 'user' : 'environment',
+      width: { ideal: settings.videoWidth },
+      height: { ideal: settings.videoHeight }
     },
-    // Estratégia 2: Sem dimensões específicas
-    {
-      video: {
-        facingMode: usingFrontCamera ? 'user' : 'environment'
-      },
-      audio: true
-    },
-    // Estratégia 3: Apenas vídeo sem áudio (fallback)
-    {
-      video: {
-        facingMode: usingFrontCamera ? 'user' : 'environment'
-      }
-    },
-    // Estratégia 4: Apenas vídeo genérico
-    {
-      video: true,
-      audio: true
-    }
-  ];
+    audio: true
+  };
 
-  for (let i = 0; i < constraintsList.length; i++) {
-    try {
-      console.log(`📷 Tentativa ${i + 1}/${constraintsList.length}`, constraintsList[i]);
-      
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout')), 8000)
-      );
-      
-      stream = await Promise.race([
-        navigator.mediaDevices.getUserMedia(constraintsList[i]),
-        timeoutPromise
-      ]);
-      
-      console.log('✅ Câmera iniciada com sucesso!', {
-        frontal: usingFrontCamera,
-        estrategia: i + 1
-      });
-      
-      video.srcObject = stream;
-      video.style.transform = usingFrontCamera ? 'scaleX(-1)' : 'scaleX(1)';
-      overlay.style.transform = 'scaleX(1)';
-      video.style.background = 'transparent';
-      
-      // Esconder mensagem de erro
-      document.getElementById('error-message').style.display = 'none';
-      isChangingCamera = false;
-      return; // Sucesso!
-      
-    } catch (err) {
-      console.warn(`❌ Estratégia ${i + 1} falhou:`, err.message);
-      
-      if (i === constraintsList.length - 1) {
-        // Última tentativa falhou
-        console.error('❌ Todas as estratégias falharam:', err);
-        
-        let errorMsg = '';
-        
-        if (err.name === 'NotAllowedError') {
-          errorMsg = '⚠️ PERMISSÃO NEGADA\n\nVocê negou acesso à câmera. Verifique as permissões do navegador e recarregue a página.';
-        } else if (err.name === 'NotFoundError') {
-          errorMsg = '⚠️ CÂMERA NÃO ENCONTRADA\n\nNenhuma câmera foi detectada no dispositivo.';
-          // Se for câmera traseira, volta para frontal
-          if (!usingFrontCamera) {
-            console.log('Revertendo para câmera frontal...');
-            usingFrontCamera = true;
-            isChangingCamera = false;
-            await new Promise(resolve => setTimeout(resolve, 500));
-            await startCamera();
-            return;
-          }
-        } else if (err.name === 'NotReadableError') {
-          errorMsg = '⚠️ CÂMERA OCUPADA\n\nOutra aplicação está usando a câmera. Feche outros apps.';
-        } else if (err.message === 'Timeout') {
-          errorMsg = '⚠️ TIMEOUT\n\nA câmera demorou muito para responder.';
-          if (!usingFrontCamera) {
-            console.log('Timeout na câmera traseira, voltando para frontal...');
-            usingFrontCamera = true;
-            isChangingCamera = false;
-            await new Promise(resolve => setTimeout(resolve, 500));
-            await startCamera();
-            return;
-          }
-        } else {
-          errorMsg = `⚠️ ERRO NA CÂMERA\n\n${err.message || 'Erro desconhecido'}`;
-        }
-        
-        showError('Erro ao acessar câmera', errorMsg);
-        isChangingCamera = false;
+  try {
+    console.log('Solicitando acesso à câmera...', constraints);
+    
+    // Timeout de 10 segundos para evitar travamento
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Timeout ao acessar câmera')), 10000)
+    );
+    
+    stream = await Promise.race([
+      navigator.mediaDevices.getUserMedia(constraints),
+      timeoutPromise
+    ]);
+    
+    console.log('✅ Câmera iniciada com sucesso!');
+    console.log('Usando câmera:', usingFrontCamera ? 'Frontal' : 'Traseira');
+    
+    video.srcObject = stream;
+    video.style.transform = usingFrontCamera ? 'scaleX(-1)' : 'scaleX(1)';
+    overlay.style.transform = 'scaleX(1)';
+    video.style.background = 'transparent';
+    
+    // Esconder mensagem de erro
+    document.getElementById('error-message').style.display = 'none';
+    isChangingCamera = false;
+    
+  } catch (err) {
+    console.error('❌ Erro ao acessar câmera:', err);
+    
+    let errorMsg = '';
+    
+    if (err.name === 'NotAllowedError') {
+      errorMsg = '⚠️ PERMISSÃO NEGADA\n\nVocê negou acesso à câmera. Verifique as permissões do navegador e recarregue a página.';
+    } else if (err.name === 'NotFoundError') {
+      errorMsg = '⚠️ CÂMERA NÃO ENCONTRADA\n\nNenhuma câmera traseira foi detectada. Usando câmera frontal.';
+      // Voltar para câmera frontal se traseira não existir
+      if (!usingFrontCamera) {
+        usingFrontCamera = true;
+        console.log('Revertendo para câmera frontal...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await startCamera();
+        return;
       }
+    } else if (err.name === 'NotReadableError') {
+      errorMsg = '⚠️ CÂMERA OCUPADA\n\nOutra aplicação está usando a câmera. Feche outros apps e recarregue.';
+    } else if (err.name === 'OverconstrainedError') {
+      errorMsg = '⚠️ CÂMERA INDISPONÍVEL\n\nO navegador não conseguiu acessar uma câmera com as configurações. Tentando novamente...';
+      // Tentar novamente com restrições menores
+      if (!usingFrontCamera) {
+        usingFrontCamera = true;
+        console.log('Revertendo para câmera frontal...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await startCamera();
+        return;
+      }
+    } else if (err.message === 'Timeout ao acessar câmera') {
+      errorMsg = '⚠️ TIMEOUT\n\nA câmera demorou muito para responder. Tentando novamente...';
+      if (!usingFrontCamera) {
+        usingFrontCamera = true;
+        console.log('Timeout na câmera traseira. Voltando para frontal...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await startCamera();
+        return;
+      }
+    } else {
+      errorMsg = `⚠️ ERRO NA CÂMERA\n\n${err.message || 'Erro desconhecido ao acessar a câmera.'}`;
     }
+    
+    showError('Erro ao acessar câmera', errorMsg);
+    isChangingCamera = false;
   }
 }
 
 switchCameraBtn.onclick = async () => {
   if (isChangingCamera) {
-    console.log('⏳ Já está trocando de câmera...');
+    console.log('Já está trocando de câmera...');
     return;
   }
 
@@ -324,7 +296,7 @@ switchCameraBtn.onclick = async () => {
   showLoading();
   
   usingFrontCamera = !usingFrontCamera;
-  console.log('🔄 Trocando câmera para:', usingFrontCamera ? 'Frontal' : 'Traseira');
+  console.log('Trocando câmera para:', usingFrontCamera ? 'Frontal' : 'Traseira');
   
   await startCamera();
   
@@ -430,11 +402,11 @@ function startVideoRecording() {
     const settings = track.getSettings();
     const optimizedSettings = bandwidthDetector.getOptimizedSettings();
 
-    const camWidth = settings.width || optimizedSettings.videoWidth;
-    const camHeight = settings.height || optimizedSettings.videoHeight;
-
+    // Usar resolução otimizada já em formato portrait (vertical)
     const width = optimizedSettings.videoWidth;
-    const height = Math.round(camHeight * (width / camWidth));
+    const height = optimizedSettings.videoHeight;
+
+    console.log('Dimensões do vídeo (portrait):', width, 'x', height);
 
     recordingCanvas.width = width;
     recordingCanvas.height = height;
@@ -443,12 +415,14 @@ function startVideoRecording() {
     isRecording = true;
     recordedChunks = [];
     videoPreviewContainer.style.display = 'none';
-    videoButtonsContainer.classList.remove('active');
-    videoInstructions.classList.remove('active');
+    videoInstructions.style.display = 'none';
 
     const fps = optimizedSettings.fps;
     const frameDelay = 1000 / fps;
     let lastFrameTime = Date.now();
+
+    const camWidth = settings.width || 640;
+    const camHeight = settings.height || 480;
 
     function drawFrame() {
       const now = Date.now();
@@ -468,14 +442,22 @@ function startVideoRecording() {
       try {
         rctx.clearRect(0, 0, width, height);
 
+        // Calcular escala para manter proporção
+        const scale = Math.max(width / camWidth, height / camHeight);
+        const scaledWidth = camWidth * scale;
+        const scaledHeight = camHeight * scale;
+        const offsetX = (width - scaledWidth) / 2;
+        const offsetY = (height - scaledHeight) / 2;
+
         if (usingFrontCamera) {
           rctx.save();
-          rctx.translate(width, 0);
+          rctx.translate(width / 2, height / 2);
           rctx.scale(-1, 1);
-          rctx.drawImage(video, 0, 0, width, height);
+          rctx.translate(-width / 2, -height / 2);
+          rctx.drawImage(video, offsetX, offsetY, scaledWidth, scaledHeight);
           rctx.restore();
         } else {
-          rctx.drawImage(video, 0, 0, width, height);
+          rctx.drawImage(video, offsetX, offsetY, scaledWidth, scaledHeight);
         }
 
         rctx.drawImage(overlay, 0, 0, width, height);
@@ -585,14 +567,16 @@ function startVideoRecording() {
             document.body.removeChild(a);
           }, 1000);
 
-          // Mostrar vídeo em tela cheia
-          videoPreviewEl.src = url;
-          videoPreviewContainer.style.display = 'block';
-          videoButtonsContainer.classList.add('active');
           if (isiOS) {
-            videoInstructions.classList.add('active');
+            videoPreviewContainer.style.display = 'flex';
+            videoPreviewEl.style.display = 'none';
+            saveVideoBtn.style.display = 'none';
+            videoInstructions.style.display = 'block';
+          } else {
+            videoPreviewContainer.style.display = 'none';
           }
 
+          URL.revokeObjectURL(url);
           console.log('✅ Vídeo salvo com sucesso!');
         }
       } catch (err) {
@@ -646,33 +630,16 @@ saveVideoBtn.onclick = () => {
   }, 1000);
 
   if (isiOS) {
-    videoInstructions.classList.add('active');
+    videoInstructions.style.display = 'block';
   }
 };
 
-closeVideoBtn.onclick = () => {
-  videoPreviewContainer.style.display = 'none';
-  videoButtonsContainer.classList.remove('active');
-  videoInstructions.classList.remove('active');
-  videoPreviewEl.src = '';
-  console.log('✅ Vídeo fechado!');
-};
-
-// ===== INICIALIZAR QUANDO PÁGINA CARREGAR =====
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('🤖 Página carregada! Iniciando câmera frontal...');
-  startCamera();
+// Iniciar
+console.log('🤖 Robô iniciando...');
+console.log('Sistema:', {
+  browser: navigator.userAgent,
+  iOS: isiOS,
+  connection: navigator.connection?.effectiveType
 });
-
-// Fallback se DOMContentLoaded não disparar
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    console.log('🤖 Página carregada (fallback)! Iniciando câmera frontal...');
-    startCamera();
-  });
-} else {
-  console.log('🤖 Robô iniciando... (DOM já estava carregado)');
-  startCamera();
-}
-
+startCamera();
 console.log('🤖 Robô iniciado!');
