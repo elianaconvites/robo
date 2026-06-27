@@ -1,0 +1,5 @@
+# Adicione a moldura.png aqui
+
+Para usar a aplicação, você precisa adicionar uma imagem PNG de moldura na raiz do projeto com o nome `moldura.png`.
+
+A imagem deve ter um fundo transparente para que a moldura apareça corretamente sobre o vídeo.

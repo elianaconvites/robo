@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Robô - Câmera com Moldura</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      transition: background-color 0.3s ease;
+    }
+
+    /* Modo noturno */
+    body.dark-mode {
+      background: #0a0a0a;
+    }
+
+    body.light-mode {
+      background: #f5f5f5;
+    }
+
+    #video {
+      position: absolute;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+    }
+
+    #overlay {
+      position: absolute;
+      inset: 0;
+      max-width: 100vw;
+      max-height: 100vh;
+      margin: auto;
+      object-fit: contain;
+      pointer-events: none;
+    }
+
+    /* Indicador de modo noturno */
+    #theme-toggle {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255, 255, 255, 0.9);
+      font-size: 24px;
+      cursor: pointer;
+      z-index: 15;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      transition: all 0.3s ease;
+    }
+
+    #theme-toggle:hover {
+      transform: scale(1.1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Indicador de conexão lenta */
+    #bandwidth-warning {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(255, 152, 0, 0.9);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: bold;
+      display: none;
+      z-index: 15;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    #buttons {
+      position: absolute;
+      bottom: 50px;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      z-index: 10;
+      flex-wrap: wrap;
+    }
+
+    button {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      border: none;
+      background: white;
+      font-size: 28px;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      transition: all 0.2s ease;
+    }
+
+    button:hover {
+      transform: scale(1.1);
+    }
+
+    button:active {
+      transform: scale(0.95);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #preview-container {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 11;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 16px;
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+    }
+
+    #photo-preview {
+      width: 85vw;
+      max-width: 280px;
+      border: 3px solid white;
+      border-radius: 10px;
+      margin-bottom: 8px;
+    }
+
+    #save-btn, #retry-btn {
+      background: #4CAF50;
+      color: white;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 15px;
+      margin-top: 5px;
+      width: 160px;
+      border: none;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    #save-btn:hover, #retry-btn:hover {
+      background: #45a049;
+    }
+
+    #instructions {
+      color: #fff;
+      font-size: 14px;
+      font-weight: bold;
+      background-color: rgba(0, 0, 0, 0.6);
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-top: 10px;
+      display: none;
+      text-align: center;
+      max-width: 90%;
+    }
+
+    #recording-indicator {
+      position: absolute;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 12;
+      background: rgba(255, 0, 0, 0.8);
+      color: #fff;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: bold;
+      display: none;
+      animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    #video-preview-container {
+      position: absolute;
+      bottom: 140px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 11;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 16px;
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+    }
+
+    #video-preview {
+      width: 85vw;
+      max-width: 280px;
+      border: 3px solid white;
+      border-radius: 10px;
+      margin-bottom: 8px;
+      background: #000;
+    }
+
+    #save-video-btn {
+      background: #4CAF50;
+      color: white;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 15px;
+      margin-top: 5px;
+      width: 180px;
+      border: none;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    #save-video-btn:hover {
+      background: #45a049;
+    }
+
+    #video-instructions {
+      color: #fff;
+      font-size: 13px;
+      font-weight: bold;
+      background-color: rgba(0, 0, 0, 0.6);
+      padding: 8px 10px;
+      border-radius: 8px;
+      margin-top: 8px;
+      display: none;
+      text-align: center;
+      max-width: 90%;
+    }
+
+    #loading-message {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 20;
+      background: rgba(0, 0, 0, 0.9);
+      color: #fff;
+      padding: 16px 20px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: bold;
+      text-align: center;
+      max-width: 80%;
+      display: none;
+    }
+
+    /* Responsivo */
+    @media (max-width: 480px) {
+      #buttons {
+        gap: 20px;
+      }
+
+      button {
+        width: 60px;
+        height: 60px;
+        font-size: 24px;
+      }
+    }
+  </style>
+</head>
+<body class="dark-mode">
+  <video id="video" autoplay muted playsinline></video>
+  <img id="overlay" src="moldura.png" alt="Moldura" />
+
+  <button id="theme-toggle" title="Alternar modo noturno">🌙</button>
+  <div id="bandwidth-warning">⚠️ Conexão lenta detectada</div>
+  <div id="recording-indicator">🔴 REC 00:00</div>
+  <div id="loading-message">Aguarde… estamos preparando seu arquivo 📽️✨</div>
+
+  <div id="buttons">
+    <button id="switch-camera" title="Trocar câmera">🔄</button>
+    <button id="capture" title="Tirar foto">📸</button>
+    <button id="start-recording" title="Gravar vídeo">🎥</button>
+    <button id="stop-recording" title="Parar gravação" style="display:none;">⏹</button>
+  </div>
+
+  <canvas id="canvas" style="display:none;"></canvas>
+  <canvas id="recordingCanvas" style="display:none;"></canvas>
+
+  <div id="preview-container">
+    <img id="photo-preview" />
+    <button id="save-btn">Salvar na galeria</button>
+    <button id="retry-btn">Tirar outra</button>
+    <div id="instructions">
+      Se estiver no iPhone:<br>
+      Toque e segure a imagem e selecione "Salvar na Fototeca".
+    </div>
+  </div>
+
+  <div id="video-preview-container">
+    <video id="video-preview" controls playsinline></video>
+    <button id="save-video-btn">Salvar vídeo</button>
+    <div id="video-instructions">
+      No iPhone, o vídeo vai para o app "Arquivos" (na pasta Downloads).<br>
+      Abra o app Arquivos, toque no vídeo, depois em compartilhar e selecione "Salvar Vídeo" para enviar à galeria.
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
