@@ -152,12 +152,8 @@ const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 const API_URL = "https://video-converter-api-production-bb8e.up.railway.app/convert";
 const SECURITY_KEY = "EC-MOLDURA-2025-V1";
 
-// Dimensões fixas da moldura para GRAVAÇÃO
-const MOLDURA_WIDTH = 1080;
-const MOLDURA_HEIGHT = 1920;
-
-// Dimensões para REPRODUÇÃO (como o projeto Heitor)
-const PLAYBACK_WIDTH = 640;
+// Dimensões do modelo Heitor (640px de largura)
+const MOLDURA_WIDTH = 640;
 
 // ===== FUNÇÕES AUXILIARES =====
 function showLoading() {
@@ -206,7 +202,9 @@ async function startCamera() {
   
   const constraints = {
     video: {
-      facingMode: usingFrontCamera ? 'user' : 'environment'
+      facingMode: usingFrontCamera ? 'user' : 'environment',
+      width: { ideal: 1920 },
+      height: { ideal: 1080 }
     },
     audio: true
   };
@@ -339,7 +337,7 @@ captureBtn.onclick = () => {
     ctx.drawImage(overlay, 0, 0, width, height);
 
     const quality = bandwidthDetector.getPhotoCompression();
-    const dataUrl = canvas.toDataURL('image/jpeg', quality);
+    const dataUrl = canvas.toDataURL('image/png');
 
     photoPreview.src = dataUrl;
     previewContainer.style.display = 'flex';
@@ -352,7 +350,7 @@ captureBtn.onclick = () => {
 
 saveBtn.onclick = () => {
   const link = document.createElement('a');
-  link.download = 'foto-moldura.jpg';
+  link.download = 'foto-moldura.png';
   link.href = photoPreview.src;
   link.click();
 
@@ -403,18 +401,22 @@ function startVideoRecording() {
     }
 
     const settings = track.getSettings();
-    const camWidth = settings.width || 640;
-    const camHeight = settings.height || 480;
+    const camWidth = settings.width || 1920;
+    const camHeight = settings.height || 1080;
 
-    // O vídeo terá o tamanho exato da moldura para GRAVAÇÃO
-    const videoWidth = MOLDURA_WIDTH;
-    const videoHeight = MOLDURA_HEIGHT;
+    // Resolução reduzida (640 de largura) para estabilidade em Android, como modelo Heitor
+    const targetWidth = 640;
+    const ratio = targetWidth / camWidth;
+    const targetHeight = Math.round(camHeight * ratio);
 
-    console.log('Dimensões do vídeo para GRAVAÇÃO:', videoWidth, 'x', videoHeight);
+    const width = targetWidth;
+    const height = targetHeight;
+
+    console.log('Dimensões do vídeo (modelo Heitor):', width, 'x', height);
     console.log('Dimensões da câmera:', camWidth, 'x', camHeight);
 
-    recordingCanvas.width = videoWidth;
-    recordingCanvas.height = videoHeight;
+    recordingCanvas.width = width;
+    recordingCanvas.height = height;
     
     const rctx = recordingCanvas.getContext('2d', { willReadFrequently: false });
 
@@ -443,34 +445,22 @@ function startVideoRecording() {
       }
 
       try {
-        // Preencher fundo com preto
-        rctx.fillStyle = '#000000';
-        rctx.fillRect(0, 0, videoWidth, videoHeight);
+        // Limpar canvas
+        rctx.clearRect(0, 0, width, height);
 
-        // Calcular escala FIT (sem corte, cabe tudo)
-        const scaleX = videoWidth / camWidth;
-        const scaleY = videoHeight / camHeight;
-        const scale = Math.min(scaleX, scaleY);
-        
-        const displayWidth = camWidth * scale;
-        const displayHeight = camHeight * scale;
-        const offsetX = (videoWidth - displayWidth) / 2;
-        const offsetY = (videoHeight - displayHeight) / 2;
-
-        // Desenhar vídeo centralizado
+        // Desenhar vídeo
         if (usingFrontCamera) {
           rctx.save();
-          rctx.translate(offsetX + displayWidth / 2, offsetY + displayHeight / 2);
+          rctx.translate(width, 0);
           rctx.scale(-1, 1);
-          rctx.translate(-(displayWidth / 2), -(displayHeight / 2));
-          rctx.drawImage(video, 0, 0, displayWidth, displayHeight);
+          rctx.drawImage(video, 0, 0, width, height);
           rctx.restore();
         } else {
-          rctx.drawImage(video, offsetX, offsetY, displayWidth, displayHeight);
+          rctx.drawImage(video, 0, 0, width, height);
         }
 
-        // Desenhar moldura no tamanho exato
-        rctx.drawImage(overlay, 0, 0, videoWidth, videoHeight);
+        // Desenhar moldura
+        rctx.drawImage(overlay, 0, 0, width, height);
       } catch (err) {
         console.warn('Erro ao desenhar frame:', err);
       }
@@ -553,8 +543,8 @@ function startVideoRecording() {
         formData.append('video', blob, 'video.webm');
         const device = isiOS ? 'ios' : 'android';
         
-        // Adicionar parâmetros para REPRODUÇÃO em 640px (como projeto Heitor)
-        const resposta = await fetch(`${API_URL}?device=${device}&key=${SECURITY_KEY}&preserve=true&width=${PLAYBACK_WIDTH}&playback=true`, {
+        // Enviar com dimensões 640px (modelo Heitor)
+        const resposta = await fetch(`${API_URL}?device=${device}&key=${SECURITY_KEY}&width=${MOLDURA_WIDTH}`, {
           method: 'POST',
           body: formData
         });
@@ -588,7 +578,7 @@ function startVideoRecording() {
           }
 
           URL.revokeObjectURL(url);
-          console.log('✅ Vídeo salvo com sucesso! Reprodução em 640px (como projeto Heitor)');
+          console.log('✅ Vídeo salvo com sucesso! (Modelo Heitor - 640px)');
         }
       } catch (err) {
         console.error('Erro ao enviar vídeo:', err);
@@ -607,7 +597,7 @@ function startVideoRecording() {
 
     startRecordBtn.style.display = 'none';
     stopRecordBtn.style.display = 'inline-block';
-    console.log('✅ Gravação iniciada!');
+    console.log('✅ Gravação iniciada! (Modelo Heitor - 640px)');
   } catch (err) {
     console.error('Erro ao iniciar gravação:', err);
     showError('Erro', 'Erro ao iniciar gravação de vídeo: ' + err.message);
@@ -652,5 +642,6 @@ console.log('Sistema:', {
   iOS: isiOS,
   connection: navigator.connection?.effectiveType
 });
+console.log('Modelo: Heitor (640px)');
 startCamera();
 console.log('🤖 Robô iniciado!');
