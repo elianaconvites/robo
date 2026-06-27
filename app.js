@@ -152,6 +152,10 @@ const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 const API_URL = "https://video-converter-api-production-bb8e.up.railway.app/convert";
 const SECURITY_KEY = "EC-MOLDURA-2025-V1";
 
+// Dimensões fixas da moldura
+const MOLDURA_WIDTH = 1080;
+const MOLDURA_HEIGHT = 1920;
+
 // ===== FUNÇÕES AUXILIARES =====
 function showLoading() {
   loadingMessage.style.display = 'block';
@@ -396,25 +400,19 @@ function startVideoRecording() {
     }
 
     const settings = track.getSettings();
-    const optimizedSettings = bandwidthDetector.getOptimizedSettings();
+    const camWidth = settings.width || 640;
+    const camHeight = settings.height || 480;
 
-    // Usar resolução otimizada 1080x1920 (Full HD portrait)
-    const width = optimizedSettings.videoWidth;
-    const height = optimizedSettings.videoHeight;
+    // O vídeo terá o tamanho exato da moldura
+    const videoWidth = MOLDURA_WIDTH;
+    const videoHeight = MOLDURA_HEIGHT;
 
-    console.log('Dimensões do vídeo final:', width, 'x', height);
-    console.log('Dimensões da câmera:', settings.width, 'x', settings.height);
+    console.log('Dimensões do vídeo final:', videoWidth, 'x', videoHeight);
+    console.log('Dimensões da câmera:', camWidth, 'x', camHeight);
 
-    recordingCanvas.width = width;
-    recordingCanvas.height = height;
+    recordingCanvas.width = videoWidth;
+    recordingCanvas.height = videoHeight;
     
-    // Redimensionar a moldura para o tamanho exato do vídeo
-    const overlayResized = document.createElement('canvas');
-    overlayResized.width = width;
-    overlayResized.height = height;
-    const overlayCtx = overlayResized.getContext('2d');
-    overlayCtx.drawImage(overlay, 0, 0, width, height);
-
     const rctx = recordingCanvas.getContext('2d', { willReadFrequently: false });
 
     isRecording = true;
@@ -422,7 +420,7 @@ function startVideoRecording() {
     videoPreviewContainer.style.display = 'none';
     videoInstructions.style.display = 'none';
 
-    const fps = optimizedSettings.fps;
+    const fps = 24;
     const frameDelay = 1000 / fps;
     let lastFrameTime = Date.now();
 
@@ -442,26 +440,21 @@ function startVideoRecording() {
       }
 
       try {
-        rctx.clearRect(0, 0, width, height);
-
-        // Preencher com cor preta
+        // Preencher fundo com preto
         rctx.fillStyle = '#000000';
-        rctx.fillRect(0, 0, width, height);
+        rctx.fillRect(0, 0, videoWidth, videoHeight);
 
-        // Desenhar vídeo sem zoom, usando escala baseada em FIT (sem corte)
-        const camWidth = settings.width || 640;
-        const camHeight = settings.height || 480;
-        
-        // Scale baseado em FIT (cabe tudo sem corte)
-        const scaleX = width / camWidth;
-        const scaleY = height / camHeight;
+        // Calcular escala FIT (sem corte, cabe tudo)
+        const scaleX = videoWidth / camWidth;
+        const scaleY = videoHeight / camHeight;
         const scale = Math.min(scaleX, scaleY);
         
         const displayWidth = camWidth * scale;
         const displayHeight = camHeight * scale;
-        const offsetX = (width - displayWidth) / 2;
-        const offsetY = (height - displayHeight) / 2;
+        const offsetX = (videoWidth - displayWidth) / 2;
+        const offsetY = (videoHeight - displayHeight) / 2;
 
+        // Desenhar vídeo centralizado
         if (usingFrontCamera) {
           rctx.save();
           rctx.translate(offsetX + displayWidth / 2, offsetY + displayHeight / 2);
@@ -473,8 +466,8 @@ function startVideoRecording() {
           rctx.drawImage(video, offsetX, offsetY, displayWidth, displayHeight);
         }
 
-        // Desenhar moldura redimensionada exatamente no tamanho do canvas
-        rctx.drawImage(overlayResized, 0, 0, width, height);
+        // Desenhar moldura no tamanho exato
+        rctx.drawImage(overlay, 0, 0, videoWidth, videoHeight);
       } catch (err) {
         console.warn('Erro ao desenhar frame:', err);
       }
