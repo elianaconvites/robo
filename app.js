@@ -549,8 +549,9 @@ function startVideoRecording() {
         const formData = new FormData();
         formData.append('video', blob, 'video.webm');
         const device = isiOS ? 'ios' : 'android';
-
-        const resposta = await fetch(`${API_URL}?device=${device}&key=${SECURITY_KEY}`, {
+        
+        // Adicionar parâmetro para preservar dimensões e qualidade
+        const resposta = await fetch(`${API_URL}?device=${device}&key=${SECURITY_KEY}&preserve=true&width=${MOLDURA_WIDTH}&height=${MOLDURA_HEIGHT}`, {
           method: 'POST',
           body: formData
         });
