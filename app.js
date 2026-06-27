@@ -406,7 +406,7 @@ function startVideoRecording() {
     const width = optimizedSettings.videoWidth;
     const height = optimizedSettings.videoHeight;
 
-    console.log('Dimensões do vídeo (Full HD portrait):', width, 'x', height);
+    console.log('Dimensões do vídeo (Full HD portrait SEM ZOOM):', width, 'x', height);
 
     recordingCanvas.width = width;
     recordingCanvas.height = height;
@@ -442,12 +442,16 @@ function startVideoRecording() {
       try {
         rctx.clearRect(0, 0, width, height);
 
-        // Calcular escala para manter proporção
-        const scale = Math.max(width / camWidth, height / camHeight);
+        // Calcular escala SEM ZOOM - usar o menor dos dois para não cortar
+        const scale = Math.min(width / camWidth, height / camHeight);
         const scaledWidth = camWidth * scale;
         const scaledHeight = camHeight * scale;
         const offsetX = (width - scaledWidth) / 2;
         const offsetY = (height - scaledHeight) / 2;
+
+        // Preencher com cor preta o espaço vazio (letterbox)
+        rctx.fillStyle = '#000000';
+        rctx.fillRect(0, 0, width, height);
 
         if (usingFrontCamera) {
           rctx.save();
