@@ -147,6 +147,9 @@ let recordedMimeType = 'video/webm';
 let lastVideoUrl = null;
 let frameInterval = null;
 let isChangingCamera = false;
+let cameraWidth = 0;
+let cameraHeight = 0;
+let overlayScaled = null;
 
 const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 const API_URL = "https://video-converter-api-production-bb8e.up.railway.app/convert";
@@ -178,6 +181,21 @@ function stopAllRecording() {
     frameInterval = null;
   }
   stopRecordingTimer();
+}
+
+// ===== FUNÇÃO PARA REDIMENSIONAR A MOLDURA =====
+function scaleOverlay(targetWidth, targetHeight) {
+  console.log(`Redimensionando moldura para ${targetWidth}x${targetHeight}`);
+  
+  const scaledOverlay = document.createElement('canvas');
+  scaledOverlay.width = targetWidth;
+  scaledOverlay.height = targetHeight;
+  const ctx = scaledOverlay.getContext('2d');
+  
+  // Desenhar a moldura original redimensionada
+  ctx.drawImage(overlay, 0, 0, targetWidth, targetHeight);
+  
+  return scaledOverlay;
 }
 
 // ===== CÂMERA =====
@@ -224,6 +242,18 @@ async function startCamera() {
     video.style.transform = usingFrontCamera ? 'scaleX(-1)' : 'scaleX(1)';
     overlay.style.transform = 'scaleX(1)';
     video.style.background = 'transparent';
+    
+    // Detectar e armazenar dimensões reais da câmera
+    const track = stream.getVideoTracks()[0];
+    if (track) {
+      const settings = track.getSettings();
+      cameraWidth = settings.width;
+      cameraHeight = settings.height;
+      console.log(`📷 Câmera detectada: ${cameraWidth}x${cameraHeight}`);
+      
+      // Redimensionar moldura com as dimensões da câmera
+      overlayScaled = scaleOverlay(cameraWidth, cameraHeight);
+    }
     
     // Esconder mensagem de erro
     document.getElementById('error-message').style.display = 'none';
@@ -408,12 +438,12 @@ function startVideoRecording() {
     recordingCanvas.width = width;
     recordingCanvas.height = height;
     
-    // Criar overlay redimensionado com as mesmas proporções do vídeo
-    const overlayResized = document.createElement('canvas');
-    overlayResized.width = width;
-    overlayResized.height = height;
-    const overlayCtx = overlayResized.getContext('2d');
-    overlayCtx.drawImage(overlay, 0, 0, width, height);
+    // Usar a moldura já redimensionada com as dimensões reais da câmera
+    let molduraUsada = overlayScaled;
+    if (!molduraUsada) {
+      // Fallback se não tenha sido criada
+      molduraUsada = scaleOverlay(width, height);
+    }
 
     const rctx = recordingCanvas.getContext('2d', { willReadFrequently: false });
 
@@ -473,8 +503,8 @@ function startVideoRecording() {
           rctx.drawImage(video, offsetX, offsetY, displayWidth, displayHeight);
         }
 
-        // Desenhar moldura com as mesmas proporções
-        rctx.drawImage(overlayResized, 0, 0, width, height);
+        // Desenhar moldura já escalada
+        rctx.drawImage(molduraUsada, 0, 0, width, height);
       } catch (err) {
         console.warn('Erro ao desenhar frame:', err);
       }
