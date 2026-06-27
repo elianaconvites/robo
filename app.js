@@ -649,13 +649,21 @@ saveVideoBtn.onclick = () => {
   }
 };
 
-// Iniciar
-console.log('🤖 Robô iniciando...');
-console.log('Sistema:', {
-  browser: navigator.userAgent,
-  iOS: isiOS,
-  Android: isAndroid,
-  connection: navigator.connection?.effectiveType
+// ===== INICIALIZAR QUANDO PÁGINA CARREGAR =====
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('🤖 Página carregada! Iniciando câmera frontal...');
+  startCamera();
 });
-startCamera();
+
+// Fallback se DOMContentLoaded não disparar
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    console.log('🤖 Página carregada (fallback)! Iniciando câmera frontal...');
+    startCamera();
+  });
+} else {
+  console.log('🤖 Robô iniciando... (DOM já estava carregado)');
+  startCamera();
+}
+
 console.log('🤖 Robô iniciado!');
