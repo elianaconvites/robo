@@ -25,19 +25,15 @@ class BandwidthDetector {
   getOptimizedSettings() {
     if (this.isSlowConnection) {
       return {
-        cameraWidth: 1280,
-        cameraHeight: 720,
-        videoWidth: 480,
-        videoHeight: 270,
+        videoWidth: 540,
+        videoHeight: 960,
         fps: 15,
         bitrate: 300000
       };
     }
     return {
-      cameraWidth: 1920,
-      cameraHeight: 1080,
-      videoWidth: 640,
-      videoHeight: 360,
+      videoWidth: 1080,
+      videoHeight: 1920,
       fps: 24,
       bitrate: 1000000
     };
@@ -206,8 +202,8 @@ async function startCamera() {
   const constraints = {
     video: {
       facingMode: usingFrontCamera ? 'user' : 'environment',
-      width: { ideal: settings.cameraWidth },
-      height: { ideal: settings.cameraHeight }
+      width: { ideal: settings.videoWidth },
+      height: { ideal: settings.videoHeight }
     },
     audio: true
   };
@@ -340,7 +336,7 @@ captureBtn.onclick = () => {
     ctx.drawImage(overlay, 0, 0, width, height);
 
     const quality = bandwidthDetector.getPhotoCompression();
-    const dataUrl = canvas.toDataURL('image/png', quality);
+    const dataUrl = canvas.toDataURL('image/jpeg', quality);
 
     photoPreview.src = dataUrl;
     previewContainer.style.display = 'flex';
@@ -353,7 +349,7 @@ captureBtn.onclick = () => {
 
 saveBtn.onclick = () => {
   const link = document.createElement('a');
-  link.download = 'foto-moldura.png';
+  link.download = 'foto-moldura.jpg';
   link.href = photoPreview.src;
   link.click();
 
@@ -406,14 +402,14 @@ function startVideoRecording() {
     const settings = track.getSettings();
     const optimizedSettings = bandwidthDetector.getOptimizedSettings();
 
-    // Usar resolução otimizada 640x360 (proporcional)
-    const targetWidth = optimizedSettings.videoWidth;
-    const targetHeight = optimizedSettings.videoHeight;
+    // Usar resolução otimizada 1080x1920 (Full HD portrait)
+    const width = optimizedSettings.videoWidth;
+    const height = optimizedSettings.videoHeight;
 
-    console.log('Dimensões do vídeo:', targetWidth, 'x', targetHeight);
+    console.log('Dimensões do vídeo (Full HD portrait):', width, 'x', height);
 
-    recordingCanvas.width = targetWidth;
-    recordingCanvas.height = targetHeight;
+    recordingCanvas.width = width;
+    recordingCanvas.height = height;
     const rctx = recordingCanvas.getContext('2d', { willReadFrequently: false });
 
     isRecording = true;
@@ -425,8 +421,8 @@ function startVideoRecording() {
     const frameDelay = 1000 / fps;
     let lastFrameTime = Date.now();
 
-    const camWidth = settings.width || 1920;
-    const camHeight = settings.height || 1080;
+    const camWidth = settings.width || 640;
+    const camHeight = settings.height || 480;
 
     function drawFrame() {
       const now = Date.now();
@@ -444,19 +440,27 @@ function startVideoRecording() {
       }
 
       try {
-        rctx.clearRect(0, 0, targetWidth, targetHeight);
+        rctx.clearRect(0, 0, width, height);
+
+        // Calcular escala para manter proporção
+        const scale = Math.max(width / camWidth, height / camHeight);
+        const scaledWidth = camWidth * scale;
+        const scaledHeight = camHeight * scale;
+        const offsetX = (width - scaledWidth) / 2;
+        const offsetY = (height - scaledHeight) / 2;
 
         if (usingFrontCamera) {
           rctx.save();
-          rctx.translate(targetWidth, 0);
+          rctx.translate(width / 2, height / 2);
           rctx.scale(-1, 1);
-          rctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+          rctx.translate(-width / 2, -height / 2);
+          rctx.drawImage(video, offsetX, offsetY, scaledWidth, scaledHeight);
           rctx.restore();
         } else {
-          rctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+          rctx.drawImage(video, offsetX, offsetY, scaledWidth, scaledHeight);
         }
 
-        rctx.drawImage(overlay, 0, 0, targetWidth, targetHeight);
+        rctx.drawImage(overlay, 0, 0, width, height);
       } catch (err) {
         console.warn('Erro ao desenhar frame:', err);
       }
