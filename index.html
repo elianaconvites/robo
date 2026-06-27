@@ -234,58 +234,77 @@
 
     #video-preview-container {
       position: fixed;
-      bottom: 140px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 11;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 50;
       display: none;
       flex-direction: column;
       align-items: center;
-      background: rgba(0, 0, 0, 0.8);
-      padding: 16px;
-      border-radius: 12px;
-      backdrop-filter: blur(10px);
-      max-height: 80vh;
-      overflow-y: auto;
-    }
-
-    #video-preview {
-      width: 85vw;
-      max-width: 280px;
-      border: 3px solid white;
-      border-radius: 10px;
-      margin-bottom: 8px;
+      justify-content: center;
       background: #000;
     }
 
-    #save-video-btn {
+    #video-preview {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: #000;
+    }
+
+    #video-buttons-container {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 51;
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      justify-content: center;
+      padding: 0 20px;
+    }
+
+    #save-video-btn, #close-video-btn {
       background: #4CAF50;
       color: white;
       border-radius: 6px;
-      padding: 8px 16px;
-      font-size: 15px;
-      margin-top: 5px;
-      width: 180px;
+      padding: 10px 20px;
+      font-size: 14px;
       border: none;
       cursor: pointer;
       transition: background 0.2s ease;
+    }
+
+    #close-video-btn {
+      background: #f44336;
     }
 
     #save-video-btn:hover {
       background: #45a049;
     }
 
+    #close-video-btn:hover {
+      background: #da190b;
+    }
+
     #video-instructions {
       color: #fff;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: bold;
-      background-color: rgba(0, 0, 0, 0.6);
+      background-color: rgba(0, 0, 0, 0.7);
       padding: 8px 10px;
       border-radius: 8px;
       margin-top: 8px;
       display: none;
       text-align: center;
       max-width: 90%;
+      position: fixed;
+      bottom: 140px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 51;
     }
 
     #loading-message {
@@ -360,7 +379,10 @@
 
   <div id="video-preview-container">
     <video id="video-preview" controls playsinline webkit-playsinline></video>
-    <button id="save-video-btn">Salvar vídeo</button>
+    <div id="video-buttons-container">
+      <button id="save-video-btn">💾 Salvar vídeo</button>
+      <button id="close-video-btn">❌ Fechar</button>
+    </div>
     <div id="video-instructions">
       No iPhone, o vídeo vai para o app "Arquivos" (na pasta Downloads).<br>
       Abra o app Arquivos, toque no vídeo, depois em compartilhar e selecione "Salvar Vídeo" para enviar à galeria.
