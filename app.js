@@ -152,9 +152,12 @@ const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 const API_URL = "https://video-converter-api-production-bb8e.up.railway.app/convert";
 const SECURITY_KEY = "EC-MOLDURA-2025-V1";
 
-// Dimensões fixas da moldura
+// Dimensões fixas da moldura para GRAVAÇÃO
 const MOLDURA_WIDTH = 1080;
 const MOLDURA_HEIGHT = 1920;
+
+// Dimensões para REPRODUÇÃO (como o projeto Heitor)
+const PLAYBACK_WIDTH = 640;
 
 // ===== FUNÇÕES AUXILIARES =====
 function showLoading() {
@@ -403,11 +406,11 @@ function startVideoRecording() {
     const camWidth = settings.width || 640;
     const camHeight = settings.height || 480;
 
-    // O vídeo terá o tamanho exato da moldura
+    // O vídeo terá o tamanho exato da moldura para GRAVAÇÃO
     const videoWidth = MOLDURA_WIDTH;
     const videoHeight = MOLDURA_HEIGHT;
 
-    console.log('Dimensões do vídeo final:', videoWidth, 'x', videoHeight);
+    console.log('Dimensões do vídeo para GRAVAÇÃO:', videoWidth, 'x', videoHeight);
     console.log('Dimensões da câmera:', camWidth, 'x', camHeight);
 
     recordingCanvas.width = videoWidth;
@@ -550,8 +553,8 @@ function startVideoRecording() {
         formData.append('video', blob, 'video.webm');
         const device = isiOS ? 'ios' : 'android';
         
-        // Adicionar parâmetro para preservar dimensões e qualidade
-        const resposta = await fetch(`${API_URL}?device=${device}&key=${SECURITY_KEY}&preserve=true&width=${MOLDURA_WIDTH}&height=${MOLDURA_HEIGHT}`, {
+        // Adicionar parâmetros para REPRODUÇÃO em 640px (como projeto Heitor)
+        const resposta = await fetch(`${API_URL}?device=${device}&key=${SECURITY_KEY}&preserve=true&width=${PLAYBACK_WIDTH}&playback=true`, {
           method: 'POST',
           body: formData
         });
@@ -585,7 +588,7 @@ function startVideoRecording() {
           }
 
           URL.revokeObjectURL(url);
-          console.log('✅ Vídeo salvo com sucesso!');
+          console.log('✅ Vídeo salvo com sucesso! Reprodução em 640px (como projeto Heitor)');
         }
       } catch (err) {
         console.error('Erro ao enviar vídeo:', err);
