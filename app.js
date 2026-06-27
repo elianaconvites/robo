@@ -402,14 +402,14 @@ function startVideoRecording() {
     const settings = track.getSettings();
     const optimizedSettings = bandwidthDetector.getOptimizedSettings();
 
-    // Usar resolução otimizada 1080x1920 (Full HD portrait)
-    const width = optimizedSettings.videoWidth;
-    const height = optimizedSettings.videoHeight;
+    // Usar resolução 1080x1920 (Full HD portrait)
+    const canvasWidth = optimizedSettings.videoWidth;
+    const canvasHeight = optimizedSettings.videoHeight;
 
-    console.log('Dimensões do vídeo (Full HD portrait):', width, 'x', height);
+    console.log('Dimensões do vídeo (Full HD portrait):', canvasWidth, 'x', canvasHeight);
 
-    recordingCanvas.width = width;
-    recordingCanvas.height = height;
+    recordingCanvas.width = canvasWidth;
+    recordingCanvas.height = canvasHeight;
     const rctx = recordingCanvas.getContext('2d', { willReadFrequently: false });
 
     isRecording = true;
@@ -440,27 +440,42 @@ function startVideoRecording() {
       }
 
       try {
-        rctx.clearRect(0, 0, width, height);
+        // Preencher canvas com preto (letterbox)
+        rctx.fillStyle = '#000000';
+        rctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-        // Calcular escala para manter proporção
-        const scale = Math.max(width / camWidth, height / camHeight);
-        const scaledWidth = camWidth * scale;
-        const scaledHeight = camHeight * scale;
-        const offsetX = (width - scaledWidth) / 2;
-        const offsetY = (height - scaledHeight) / 2;
+        // Calcular dimensões para manter proporção sem zoom
+        const canvasAspect = canvasWidth / canvasHeight;
+        const camAspect = camWidth / camHeight;
+        
+        let drawWidth, drawHeight, drawX, drawY;
+
+        if (camAspect > canvasAspect) {
+          // Câmera mais larga - letterbox top/bottom
+          drawWidth = canvasWidth;
+          drawHeight = canvasWidth / camAspect;
+          drawX = 0;
+          drawY = (canvasHeight - drawHeight) / 2;
+        } else {
+          // Câmera mais alta - letterbox left/right
+          drawHeight = canvasHeight;
+          drawWidth = canvasHeight * camAspect;
+          drawX = (canvasWidth - drawWidth) / 2;
+          drawY = 0;
+        }
 
         if (usingFrontCamera) {
           rctx.save();
-          rctx.translate(width / 2, height / 2);
+          rctx.translate(canvasWidth / 2, canvasHeight / 2);
           rctx.scale(-1, 1);
-          rctx.translate(-width / 2, -height / 2);
-          rctx.drawImage(video, offsetX, offsetY, scaledWidth, scaledHeight);
+          rctx.translate(-canvasWidth / 2, -canvasHeight / 2);
+          rctx.drawImage(video, drawX, drawY, drawWidth, drawHeight);
           rctx.restore();
         } else {
-          rctx.drawImage(video, offsetX, offsetY, scaledWidth, scaledHeight);
+          rctx.drawImage(video, drawX, drawY, drawWidth, drawHeight);
         }
 
-        rctx.drawImage(overlay, 0, 0, width, height);
+        rctx.drawImage(overlay, 0, 0, canvasWidth, canvasHeight);
       } catch (err) {
         console.warn('Erro ao desenhar frame:', err);
       }
