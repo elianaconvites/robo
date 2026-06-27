@@ -132,6 +132,7 @@ const recordingCanvas = document.getElementById('recordingCanvas');
 const videoPreviewContainer = document.getElementById('video-preview-container');
 const videoPreviewEl = document.getElementById('video-preview');
 const saveVideoBtn = document.getElementById('save-video-btn');
+const closeVideoBtn = document.getElementById('close-video-btn');
 const videoInstructions = document.getElementById('video-instructions');
 
 const loadingMessage = document.getElementById('loading-message');
@@ -582,16 +583,11 @@ function startVideoRecording() {
             document.body.removeChild(a);
           }, 1000);
 
-          if (isiOS) {
-            videoPreviewContainer.style.display = 'flex';
-            videoPreviewEl.style.display = 'none';
-            saveVideoBtn.style.display = 'none';
-            videoInstructions.style.display = 'block';
-          } else {
-            videoPreviewContainer.style.display = 'none';
-          }
+          // Mostrar vídeo em tela cheia
+          videoPreviewEl.src = url;
+          videoPreviewContainer.style.display = 'flex';
+          videoInstructions.style.display = isiOS ? 'block' : 'none';
 
-          URL.revokeObjectURL(url);
           console.log('✅ Vídeo salvo com sucesso!');
         }
       } catch (err) {
@@ -647,6 +643,13 @@ saveVideoBtn.onclick = () => {
   if (isiOS) {
     videoInstructions.style.display = 'block';
   }
+};
+
+closeVideoBtn.onclick = () => {
+  videoPreviewContainer.style.display = 'none';
+  videoInstructions.style.display = 'none';
+  videoPreviewEl.src = '';
+  console.log('✅ Vídeo fechado!');
 };
 
 // ===== INICIALIZAR QUANDO PÁGINA CARREGAR =====
