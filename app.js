@@ -26,14 +26,14 @@ class BandwidthDetector {
     if (this.isSlowConnection) {
       return {
         videoWidth: 540,
-        videoHeight: 1200,
+        videoHeight: 960,
         fps: 15,
         bitrate: 300000
       };
     }
     return {
       videoWidth: 1080,
-      videoHeight: 2400,
+      videoHeight: 1920,
       fps: 24,
       bitrate: 1000000
     };
@@ -402,11 +402,11 @@ function startVideoRecording() {
     const settings = track.getSettings();
     const optimizedSettings = bandwidthDetector.getOptimizedSettings();
 
-    // Usar resolução otimizada 1080x2400 (vertical ultrawide)
+    // Usar resolução otimizada 1080x1920 (Full HD portrait)
     const width = optimizedSettings.videoWidth;
     const height = optimizedSettings.videoHeight;
 
-    console.log('Dimensões do vídeo (portrait ultrawide):', width, 'x', height);
+    console.log('Dimensões do vídeo (Full HD portrait):', width, 'x', height);
 
     recordingCanvas.width = width;
     recordingCanvas.height = height;
