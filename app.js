@@ -1,3 +1,69 @@
+// ===== FILTRO DE PELE =====
+class SkinFilter {
+  constructor() {
+    this.canvas = document.createElement('canvas');
+    this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+    this.enabled = true;
+  }
+
+  // Suavização de pele (skin smoothing)
+  smoothSkin(imageData) {
+    const data = imageData.data;
+    const width = imageData.width;
+    const height = imageData.height;
+    
+    // Criar cópia para não modificar durante processamento
+    const tempData = new Uint8ClampedArray(data);
+    
+    // Aplicar filtro de média (blur) suave
+    const radius = 2;
+    for (let i = 0; i < height; i++) {
+      for (let j = 0; j < width; j++) {
+        if (i < radius || i >= height - radius || j < radius || j >= width - radius) continue;
+        
+        let r = 0, g = 0, b = 0, count = 0;
+        
+        for (let di = -radius; di <= radius; di++) {
+          for (let dj = -radius; dj <= radius; dj++) {
+            const idx = ((i + di) * width + (j + dj)) * 4;
+            r += tempData[idx];
+            g += tempData[idx + 1];
+            b += tempData[idx + 2];
+            count++;
+          }
+        }
+        
+        const idx = (i * width + j) * 4;
+        data[idx] = Math.round(r / count * 0.4 + tempData[idx] * 0.6);
+        data[idx + 1] = Math.round(g / count * 0.4 + tempData[idx + 1] * 0.6);
+        data[idx + 2] = Math.round(b / count * 0.4 + tempData[idx + 2] * 0.6);
+      }
+    }
+  }
+
+  // Clareamento de pele (skin brightening)
+  brightenSkin(imageData) {
+    const data = imageData.data;
+    
+    for (let i = 0; i < data.length; i += 4) {
+      // Aumentar brilho dos tons de pele (RGB)
+      data[i] = Math.min(255, data[i] * 1.1 + 8);      // R
+      data[i + 1] = Math.min(255, data[i + 1] * 1.08 + 6); // G
+      data[i + 2] = Math.min(255, data[i + 2] * 1.05 + 4); // B
+      // data[i + 3] permanece como está (alpha)
+    }
+  }
+
+  apply(imageData) {
+    if (!this.enabled) return imageData;
+    
+    this.smoothSkin(imageData);
+    this.brightenSkin(imageData);
+    
+    return imageData;
+  }
+}
+
 // ===== DETECÇÃO DE CONEXÃO LENTA =====
 class BandwidthDetector {
   constructor() {
@@ -110,6 +176,7 @@ function showError(title, message) {
 }
 
 // ===== APLICATIVO PRINCIPAL =====
+const skinFilter = new SkinFilter();
 const bandwidthDetector = new BandwidthDetector();
 const themeManager = new ThemeManager();
 
@@ -334,6 +401,12 @@ captureBtn.onclick = () => {
 
     ctx.drawImage(video, 0, 0, width, height);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    
+    // Aplicar filtro de pele
+    const imageData = ctx.getImageData(0, 0, width, height);
+    skinFilter.apply(imageData);
+    ctx.putImageData(imageData, 0, 0);
+    
     ctx.drawImage(overlay, 0, 0, width, height);
 
     const quality = bandwidthDetector.getPhotoCompression();
@@ -341,7 +414,7 @@ captureBtn.onclick = () => {
 
     photoPreview.src = dataUrl;
     previewContainer.style.display = 'flex';
-    console.log('✅ Foto capturada com sucesso!');
+    console.log('✅ Foto capturada com sucesso! (Com filtro de pele)');
   } catch (err) {
     console.error('Erro ao tirar foto:', err);
     showError('Erro', 'Erro ao tirar foto: ' + err.message);
@@ -418,7 +491,7 @@ function startVideoRecording() {
     recordingCanvas.width = width;
     recordingCanvas.height = height;
     
-    const rctx = recordingCanvas.getContext('2d', { willReadFrequently: false });
+    const rctx = recordingCanvas.getContext('2d', { willReadFrequently: true });
 
     isRecording = true;
     recordedChunks = [];
@@ -458,6 +531,11 @@ function startVideoRecording() {
         } else {
           rctx.drawImage(video, 0, 0, width, height);
         }
+
+        // Aplicar filtro de pele ao vídeo
+        const imageData = rctx.getImageData(0, 0, width, height);
+        skinFilter.apply(imageData);
+        rctx.putImageData(imageData, 0, 0);
 
         // Desenhar moldura
         rctx.drawImage(overlay, 0, 0, width, height);
@@ -578,7 +656,7 @@ function startVideoRecording() {
           }
 
           URL.revokeObjectURL(url);
-          console.log('✅ Vídeo salvo com sucesso! (Modelo Heitor - 640px)');
+          console.log('✅ Vídeo salvo com sucesso! (Modelo Heitor - 640px - Com filtro de pele)');
         }
       } catch (err) {
         console.error('Erro ao enviar vídeo:', err);
@@ -597,7 +675,7 @@ function startVideoRecording() {
 
     startRecordBtn.style.display = 'none';
     stopRecordBtn.style.display = 'inline-block';
-    console.log('✅ Gravação iniciada! (Modelo Heitor - 640px)');
+    console.log('✅ Gravação iniciada! (Modelo Heitor - 640px - Com filtro de pele)');
   } catch (err) {
     console.error('Erro ao iniciar gravação:', err);
     showError('Erro', 'Erro ao iniciar gravação de vídeo: ' + err.message);
@@ -643,5 +721,6 @@ console.log('Sistema:', {
   connection: navigator.connection?.effectiveType
 });
 console.log('Modelo: Heitor (640px)');
+console.log('Filtro de pele: ✅ ATIVADO (Suavização + Clareamento)');
 startCamera();
 console.log('🤖 Robô iniciado!');
