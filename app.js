@@ -15,7 +15,6 @@ class BandwidthDetector {
         document.getElementById('bandwidth-warning').style.display = 'block';
       }
 
-      // Monitorar mudanças
       connection.addEventListener('change', () => {
         this.isSlowConnection = connection.effectiveType === '2g' || connection.effectiveType === '3g' || connection.saveData;
         document.getElementById('bandwidth-warning').style.display = this.isSlowConnection ? 'block' : 'none';
@@ -26,17 +25,17 @@ class BandwidthDetector {
   getOptimizedSettings() {
     if (this.isSlowConnection) {
       return {
-        videoWidth: 640,
-        videoHeight: 480,
-        fps: 24,
-        bitrate: 500000 // 500 kbps
+        videoWidth: 480,
+        videoHeight: 360,
+        fps: 15,
+        bitrate: 300000
       };
     }
     return {
-      videoWidth: 1920,
-      videoHeight: 1080,
-      fps: 30,
-      bitrate: 2500000 // 2.5 mbps
+      videoWidth: 960,
+      videoHeight: 720,
+      fps: 24,
+      bitrate: 1000000
     };
   }
 
@@ -67,7 +66,6 @@ class ThemeManager {
   }
 
   applyTheme() {
-    const html = document.documentElement;
     const body = document.body;
     const themeToggle = document.getElementById('theme-toggle');
 
@@ -112,7 +110,6 @@ const overlay = document.getElementById('overlay');
 const canvas = document.getElementById('canvas');
 const captureBtn = document.getElementById('capture');
 const switchCameraBtn = document.getElementById('switch-camera');
-const themeToggle = document.getElementById('theme-toggle');
 const photoPreview = document.getElementById('photo-preview');
 const previewContainer = document.getElementById('preview-container');
 const saveBtn = document.getElementById('save-btn');
@@ -140,6 +137,7 @@ let recordStartTime = 0;
 let recordTimerInterval = null;
 let recordedMimeType = 'video/webm';
 let lastVideoUrl = null;
+let frameInterval = null;
 
 const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 const API_URL = "https://video-converter-api-production-bb8e.up.railway.app/convert";
@@ -161,13 +159,32 @@ function setButtonsDisabledDuringProcess(disabled) {
   stopRecordBtn.disabled = disabled;
 }
 
+function stopAllRecording() {
+  isRecording = false;
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+  }
+  if (frameInterval) {
+    cancelAnimationFrame(frameInterval);
+    frameInterval = null;
+  }
+  stopRecordingTimer();
+}
+
 // ===== CÂMERA =====
 async function startCamera() {
+  // Parar gravação se estiver ativa
+  if (isRecording) {
+    stopAllRecording();
+  }
+
   if (mediaRecorder && mediaRecorder.state === 'recording') {
     mediaRecorder.stop();
   }
 
-  if (stream) stream.getTracks().forEach(track => track.stop());
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+  }
   
   const settings = bandwidthDetector.getOptimizedSettings();
   
@@ -185,6 +202,7 @@ async function startCamera() {
     video.srcObject = stream;
     video.style.transform = usingFrontCamera ? 'scaleX(-1)' : 'scaleX(1)';
     overlay.style.transform = 'scaleX(1)';
+    console.log('Câmera iniciada - Frontal:', usingFrontCamera);
   } catch (err) {
     console.error('Erro ao acessar câmera:', err);
     alert('Não foi possível acessar a câmera. Verifique as permissões.');
@@ -193,37 +211,50 @@ async function startCamera() {
 
 switchCameraBtn.onclick = () => {
   usingFrontCamera = !usingFrontCamera;
+  console.log('Trocando câmera para:', usingFrontCamera ? 'Frontal' : 'Traseira');
   startCamera();
 };
 
 // ===== FOTO =====
 captureBtn.onclick = () => {
-  if (!stream) return;
-
-  const track = stream.getVideoTracks()[0];
-  const settings = track.getSettings();
-  const width = settings.width;
-  const height = settings.height;
-
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-
-  if (usingFrontCamera) {
-    ctx.translate(width, 0);
-    ctx.scale(-1, 1);
+  if (!stream) {
+    alert('Câmera não iniciada. Recarregue a página.');
+    return;
   }
 
-  ctx.drawImage(video, 0, 0, width, height);
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.drawImage(overlay, 0, 0, width, height);
+  try {
+    const track = stream.getVideoTracks()[0];
+    if (!track) {
+      alert('Nenhuma câmera disponível.');
+      return;
+    }
 
-  // Compactação otimizada baseada na conexão
-  const quality = bandwidthDetector.getPhotoCompression();
-  const dataUrl = canvas.toDataURL('image/jpeg', quality);
+    const settings = track.getSettings();
+    const width = settings.width;
+    const height = settings.height;
 
-  photoPreview.src = dataUrl;
-  previewContainer.style.display = 'flex';
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+
+    if (usingFrontCamera) {
+      ctx.translate(width, 0);
+      ctx.scale(-1, 1);
+    }
+
+    ctx.drawImage(video, 0, 0, width, height);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(overlay, 0, 0, width, height);
+
+    const quality = bandwidthDetector.getPhotoCompression();
+    const dataUrl = canvas.toDataURL('image/jpeg', quality);
+
+    photoPreview.src = dataUrl;
+    previewContainer.style.display = 'flex';
+  } catch (err) {
+    console.error('Erro ao tirar foto:', err);
+    alert('Erro ao tirar foto.');
+  }
 };
 
 saveBtn.onclick = () => {
@@ -266,165 +297,207 @@ function stopRecordingTimer() {
 }
 
 function startVideoRecording() {
-  if (!stream) return;
-
-  const track = stream.getVideoTracks()[0];
-  const settings = track.getSettings();
-  const optimizedSettings = bandwidthDetector.getOptimizedSettings();
-
-  const camWidth = settings.width || optimizedSettings.videoWidth;
-  const camHeight = settings.height || optimizedSettings.videoHeight;
-
-  const width = optimizedSettings.videoWidth;
-  const height = Math.round(camHeight * (width / camWidth));
-
-  recordingCanvas.width = width;
-  recordingCanvas.height = height;
-  const rctx = recordingCanvas.getContext('2d');
-
-  isRecording = true;
-  recordedChunks = [];
-  videoPreviewContainer.style.display = 'none';
-  videoInstructions.style.display = 'none';
-
-  function drawFrame() {
-    if (!isRecording) return;
-
-    rctx.clearRect(0, 0, width, height);
-
-    if (usingFrontCamera) {
-      rctx.save();
-      rctx.translate(width, 0);
-      rctx.scale(-1, 1);
-      rctx.drawImage(video, 0, 0, width, height);
-      rctx.restore();
-    } else {
-      rctx.drawImage(video, 0, 0, width, height);
-    }
-
-    rctx.drawImage(overlay, 0, 0, width, height);
-    requestAnimationFrame(drawFrame);
-  }
-
-  drawFrame();
-
-  const fps = optimizedSettings.fps;
-  const videoStream = recordingCanvas.captureStream(fps);
-  const combinedStream = new MediaStream();
-
-  videoStream.getVideoTracks().forEach(t => combinedStream.addTrack(t));
-
-  const audioTracks = stream.getAudioTracks();
-  if (audioTracks.length > 0) {
-    combinedStream.addTrack(audioTracks[0]);
-  }
-
-  let options = {};
-  recordedMimeType = 'video/webm';
-
-  try {
-    if (isiOS) {
-      options.mimeType = 'video/mp4';
-      recordedMimeType = 'video/mp4';
-    } else {
-      if (typeof MediaRecorder !== 'undefined') {
-        if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
-          options.mimeType = 'video/webm;codecs=vp9,opus';
-        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
-          options.mimeType = 'video/webm;codecs=vp8,opus';
-        }
-      }
-    }
-
-    mediaRecorder = new MediaRecorder(combinedStream, options);
-  } catch (e) {
-    console.error('Erro ao iniciar MediaRecorder:', e);
-    alert('Este navegador não suporta gravação de vídeo com som.');
-    isRecording = false;
-    stopRecordingTimer();
-    startRecordBtn.style.display = 'inline-block';
-    stopRecordBtn.style.display = 'none';
+  if (!stream) {
+    alert('Câmera não iniciada.');
     return;
   }
 
-  mediaRecorder.ondataavailable = (event) => {
-    if (event.data && event.data.size > 0) {
-      recordedChunks.push(event.data);
+  try {
+    const track = stream.getVideoTracks()[0];
+    if (!track) {
+      alert('Nenhuma câmera disponível.');
+      return;
     }
-  };
 
-  mediaRecorder.onstop = async () => {
-    isRecording = false;
-    stopRecordingTimer();
+    const settings = track.getSettings();
+    const optimizedSettings = bandwidthDetector.getOptimizedSettings();
 
-    const blob = new Blob(recordedChunks, { type: recordedMimeType });
+    const camWidth = settings.width || optimizedSettings.videoWidth;
+    const camHeight = settings.height || optimizedSettings.videoHeight;
 
-    if (!blob || blob.size === 0) {
-      alert('Nenhum dado de vídeo foi gravado.');
+    const width = optimizedSettings.videoWidth;
+    const height = Math.round(camHeight * (width / camWidth));
+
+    recordingCanvas.width = width;
+    recordingCanvas.height = height;
+    const rctx = recordingCanvas.getContext('2d', { willReadFrequently: false });
+
+    isRecording = true;
+    recordedChunks = [];
+    videoPreviewContainer.style.display = 'none';
+    videoInstructions.style.display = 'none';
+
+    const fps = optimizedSettings.fps;
+    const frameDelay = 1000 / fps;
+    let lastFrameTime = Date.now();
+
+    function drawFrame() {
+      const now = Date.now();
+      
+      if (now - lastFrameTime < frameDelay) {
+        frameInterval = requestAnimationFrame(drawFrame);
+        return;
+      }
+
+      lastFrameTime = now;
+
+      if (!isRecording) {
+        frameInterval = null;
+        return;
+      }
+
+      try {
+        rctx.clearRect(0, 0, width, height);
+
+        if (usingFrontCamera) {
+          rctx.save();
+          rctx.translate(width, 0);
+          rctx.scale(-1, 1);
+          rctx.drawImage(video, 0, 0, width, height);
+          rctx.restore();
+        } else {
+          rctx.drawImage(video, 0, 0, width, height);
+        }
+
+        rctx.drawImage(overlay, 0, 0, width, height);
+      } catch (err) {
+        console.warn('Erro ao desenhar frame:', err);
+      }
+
+      frameInterval = requestAnimationFrame(drawFrame);
+    }
+
+    frameInterval = requestAnimationFrame(drawFrame);
+
+    const videoStream = recordingCanvas.captureStream(fps);
+    const combinedStream = new MediaStream();
+
+    videoStream.getVideoTracks().forEach(t => combinedStream.addTrack(t));
+
+    const audioTracks = stream.getAudioTracks();
+    if (audioTracks.length > 0) {
+      combinedStream.addTrack(audioTracks[0]);
+    }
+
+    let options = {};
+    recordedMimeType = 'video/webm';
+
+    try {
+      if (isiOS) {
+        options.mimeType = 'video/mp4';
+        recordedMimeType = 'video/mp4';
+      } else {
+        if (typeof MediaRecorder !== 'undefined') {
+          if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+            options.mimeType = 'video/webm;codecs=vp9,opus';
+          } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+            options.mimeType = 'video/webm;codecs=vp8,opus';
+          }
+        }
+      }
+
+      mediaRecorder = new MediaRecorder(combinedStream, options);
+    } catch (e) {
+      console.error('Erro ao iniciar MediaRecorder:', e);
+      alert('Este navegador não suporta gravação de vídeo com som.');
+      isRecording = false;
+      stopRecordingTimer();
+      if (frameInterval) cancelAnimationFrame(frameInterval);
+      frameInterval = null;
       startRecordBtn.style.display = 'inline-block';
       stopRecordBtn.style.display = 'none';
       return;
     }
 
-    showLoading();
-    setButtonsDisabledDuringProcess(true);
-
-    try {
-      const formData = new FormData();
-      formData.append('video', blob, 'video.webm');
-      const device = isiOS ? 'ios' : 'android';
-
-      const resposta = await fetch(`${API_URL}?device=${device}&key=${SECURITY_KEY}`, {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!resposta.ok) {
-        console.error('Erro na conversão no servidor');
-        alert('Ocorreu um erro ao converter o vídeo. Tente novamente.');
-      } else {
-        const mp4Blob = await resposta.blob();
-        const url = URL.createObjectURL(mp4Blob);
-        lastVideoUrl = url;
-
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = 'video-moldura.mp4';
-        document.body.appendChild(a);
-        a.click();
-
-        setTimeout(() => {
-          document.body.removeChild(a);
-        }, 1000);
-
-        if (isiOS) {
-          videoPreviewContainer.style.display = 'flex';
-          videoPreviewEl.style.display = 'none';
-          saveVideoBtn.style.display = 'none';
-          videoInstructions.style.display = 'block';
-        } else {
-          videoPreviewContainer.style.display = 'none';
-        }
-
-        URL.revokeObjectURL(url);
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        recordedChunks.push(event.data);
       }
-    } catch (err) {
-      console.error('Erro ao enviar vídeo:', err);
-      alert('Erro ao enviar o vídeo para o servidor.');
-    } finally {
-      hideLoading();
-      setButtonsDisabledDuringProcess(false);
-      startRecordBtn.style.display = 'inline-block';
-      stopRecordBtn.style.display = 'none';
-    }
-  };
+    };
 
-  startRecordingTimer();
-  mediaRecorder.start(100);
+    mediaRecorder.onstop = async () => {
+      isRecording = false;
+      stopRecordingTimer();
+      
+      if (frameInterval) {
+        cancelAnimationFrame(frameInterval);
+        frameInterval = null;
+      }
 
-  startRecordBtn.style.display = 'none';
-  stopRecordBtn.style.display = 'inline-block';
+      const blob = new Blob(recordedChunks, { type: recordedMimeType });
+
+      if (!blob || blob.size === 0) {
+        alert('Nenhum dado de vídeo foi gravado.');
+        startRecordBtn.style.display = 'inline-block';
+        stopRecordBtn.style.display = 'none';
+        recordedChunks = [];
+        return;
+      }
+
+      showLoading();
+      setButtonsDisabledDuringProcess(true);
+
+      try {
+        const formData = new FormData();
+        formData.append('video', blob, 'video.webm');
+        const device = isiOS ? 'ios' : 'android';
+
+        const resposta = await fetch(`${API_URL}?device=${device}&key=${SECURITY_KEY}`, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!resposta.ok) {
+          console.error('Erro na conversão no servidor');
+          alert('Ocorreu um erro ao converter o vídeo. Tente novamente.');
+        } else {
+          const mp4Blob = await resposta.blob();
+          const url = URL.createObjectURL(mp4Blob);
+          lastVideoUrl = url;
+
+          const a = document.createElement('a');
+          a.style.display = 'none';
+          a.href = url;
+          a.download = 'video-moldura.mp4';
+          document.body.appendChild(a);
+          a.click();
+
+          setTimeout(() => {
+            document.body.removeChild(a);
+          }, 1000);
+
+          if (isiOS) {
+            videoPreviewContainer.style.display = 'flex';
+            videoPreviewEl.style.display = 'none';
+            saveVideoBtn.style.display = 'none';
+            videoInstructions.style.display = 'block';
+          } else {
+            videoPreviewContainer.style.display = 'none';
+          }
+
+          URL.revokeObjectURL(url);
+        }
+      } catch (err) {
+        console.error('Erro ao enviar vídeo:', err);
+        alert('Erro ao enviar o vídeo para o servidor.');
+      } finally {
+        hideLoading();
+        setButtonsDisabledDuringProcess(false);
+        startRecordBtn.style.display = 'inline-block';
+        stopRecordBtn.style.display = 'none';
+        recordedChunks = [];
+      }
+    };
+
+    startRecordingTimer();
+    mediaRecorder.start(100);
+
+    startRecordBtn.style.display = 'none';
+    stopRecordBtn.style.display = 'inline-block';
+  } catch (err) {
+    console.error('Erro ao iniciar gravação:', err);
+    alert('Erro ao iniciar gravação de vídeo.');
+  }
 }
 
 startRecordBtn.onclick = () => {
@@ -433,9 +506,9 @@ startRecordBtn.onclick = () => {
 };
 
 stopRecordBtn.onclick = () => {
-  if (mediaRecorder && mediaRecorder.state === 'recording') {
-    mediaRecorder.stop();
-  }
+  stopAllRecording();
+  startRecordBtn.style.display = 'inline-block';
+  stopRecordBtn.style.display = 'none';
 };
 
 saveVideoBtn.onclick = () => {
