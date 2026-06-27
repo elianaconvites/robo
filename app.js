@@ -133,6 +133,7 @@ const videoPreviewContainer = document.getElementById('video-preview-container')
 const videoPreviewEl = document.getElementById('video-preview');
 const saveVideoBtn = document.getElementById('save-video-btn');
 const closeVideoBtn = document.getElementById('close-video-btn');
+const videoButtonsContainer = document.getElementById('video-buttons-container');
 const videoInstructions = document.getElementById('video-instructions');
 
 const loadingMessage = document.getElementById('loading-message');
@@ -442,7 +443,8 @@ function startVideoRecording() {
     isRecording = true;
     recordedChunks = [];
     videoPreviewContainer.style.display = 'none';
-    videoInstructions.style.display = 'none';
+    videoButtonsContainer.classList.remove('active');
+    videoInstructions.classList.remove('active');
 
     const fps = optimizedSettings.fps;
     const frameDelay = 1000 / fps;
@@ -585,8 +587,11 @@ function startVideoRecording() {
 
           // Mostrar vídeo em tela cheia
           videoPreviewEl.src = url;
-          videoPreviewContainer.style.display = 'flex';
-          videoInstructions.style.display = isiOS ? 'block' : 'none';
+          videoPreviewContainer.style.display = 'block';
+          videoButtonsContainer.classList.add('active');
+          if (isiOS) {
+            videoInstructions.classList.add('active');
+          }
 
           console.log('✅ Vídeo salvo com sucesso!');
         }
@@ -641,13 +646,14 @@ saveVideoBtn.onclick = () => {
   }, 1000);
 
   if (isiOS) {
-    videoInstructions.style.display = 'block';
+    videoInstructions.classList.add('active');
   }
 };
 
 closeVideoBtn.onclick = () => {
   videoPreviewContainer.style.display = 'none';
-  videoInstructions.style.display = 'none';
+  videoButtonsContainer.classList.remove('active');
+  videoInstructions.classList.remove('active');
   videoPreviewEl.src = '';
   console.log('✅ Vídeo fechado!');
 };
