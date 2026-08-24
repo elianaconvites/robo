@@ -510,6 +510,10 @@ distribuição ou utilização comercial deste código, total ou parcial, sem au
           } else {
             const mp4Blob = await resposta.blob();
             const url = URL.createObjectURL(mp4Blob);
+
+            if (lastVideoUrl) {
+              URL.revokeObjectURL(lastVideoUrl);
+            }
             lastVideoUrl = url;
 
             const a = document.createElement('a');
@@ -531,8 +535,6 @@ distribuição ou utilização comercial deste código, total ou parcial, sem au
             } else {
               videoPreviewContainer.style.display = 'none';
             }
-
-            URL.revokeObjectURL(url);
           }
         } catch (err) {
           console.error('Erro ao enviar vídeo para o servidor:', err);
