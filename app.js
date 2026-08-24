@@ -281,7 +281,7 @@ function buildCameraConstraints() {
 async function getRecordingAudioTrack() {
   if (micStream) {
     const existingTrack = micStream.getAudioTracks()[0];
-    if (existingTrack) return existingTrack;
+    if (existingTrack && existingTrack.readyState === 'live') return existingTrack;
   }
 
   try {
@@ -445,7 +445,6 @@ switchCameraBtn.onclick = async () => {
       ? (currentIndex + 1) % availableVideoInputIds.length
       : 0;
     preferredVideoDeviceId = availableVideoInputIds[nextIndex];
-    usingFrontCamera = !usingFrontCamera;
   } else {
     preferredVideoDeviceId = null;
     usingFrontCamera = !usingFrontCamera;
@@ -773,6 +772,7 @@ async function startVideoRecording() {
   } catch (err) {
     console.error('Erro ao iniciar gravação:', err);
     showError('Erro', 'Erro ao iniciar gravação de vídeo: ' + err.message);
+    stopMicStream();
   }
 }
 
