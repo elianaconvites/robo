@@ -261,7 +261,12 @@ async function refreshVideoInputDevices() {
 
   const devices = await navigator.mediaDevices.enumerateDevices();
   availableVideoInputs = devices
-    .filter(device => device.kind === 'videoinput' && device.deviceId);
+    .filter(device => (
+      device.kind === 'videoinput' &&
+      device.deviceId &&
+      device.deviceId !== 'default' &&
+      device.deviceId !== 'communications'
+    ));
 }
 
 function inferIsFrontCameraByLabel(label) {
@@ -310,6 +315,8 @@ function pickVideoInputForTargetCamera(targetIsFrontCamera) {
       return availableVideoInputs[(currentIndex + 1) % availableVideoInputs.length];
     }
   }
+
+  if (!currentDeviceId) return null;
 
   return availableVideoInputs.find(device => device.deviceId !== currentDeviceId) || null;
 }
