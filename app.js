@@ -214,6 +214,8 @@ let recordedMimeType = 'video/webm';
 let lastVideoUrl = null;
 let frameInterval = null;
 let isChangingCamera = false;
+let availableVideoInputIds = [];
+let preferredVideoDeviceId = null;
 
 const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 const API_URL = "https://video-converter-api-production-bb8e.up.railway.app/convert";
@@ -250,6 +252,18 @@ function stopAllRecording() {
   stopRecordingTimer();
 }
 
+async function refreshVideoInputDevices() {
+  if (!navigator.mediaDevices?.enumerateDevices) {
+    availableVideoInputIds = [];
+    return;
+  }
+
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  availableVideoInputIds = devices
+    .filter(device => device.kind === 'videoinput' && device.deviceId)
+    .map(device => device.deviceId);
+}
+
 // ===== CÂMERA =====
 async function startCamera() {
   console.log('Iniciando câmera...');
@@ -267,9 +281,13 @@ async function startCamera() {
     stream.getTracks().forEach(track => track.stop());
   }
   
+  await refreshVideoInputDevices();
+
   const constraints = {
     video: {
-      facingMode: usingFrontCamera ? 'user' : 'environment',
+      ...(preferredVideoDeviceId
+        ? { deviceId: { exact: preferredVideoDeviceId } }
+        : { facingMode: usingFrontCamera ? 'user' : 'environment' }),
       width: { ideal: 1920 },
       height: { ideal: 1080 }
     },
@@ -293,6 +311,27 @@ async function startCamera() {
     console.log('Usando câmera:', usingFrontCamera ? 'Frontal' : 'Traseira');
     
     video.srcObject = stream;
+    const currentTrack = stream.getVideoTracks()[0];
+    const currentSettings = currentTrack?.getSettings?.() || {};
+    const currentFacingMode = currentSettings.facingMode;
+    const currentDeviceId = currentSettings.deviceId;
+
+    if (currentFacingMode === 'user') {
+      usingFrontCamera = true;
+    } else if (currentFacingMode === 'environment') {
+      usingFrontCamera = false;
+    }
+
+    if (currentDeviceId) {
+      preferredVideoDeviceId = currentDeviceId;
+      if (availableVideoInputIds.includes(currentDeviceId)) {
+        availableVideoInputIds = [
+          currentDeviceId,
+          ...availableVideoInputIds.filter(deviceId => deviceId !== currentDeviceId)
+        ];
+      }
+    }
+
     video.style.transform = usingFrontCamera ? 'scaleX(-1)' : 'scaleX(1)';
     overlay.style.transform = 'scaleX(1)';
     video.style.background = 'transparent';
@@ -313,6 +352,7 @@ async function startCamera() {
       // Voltar para câmera frontal se traseira não existir
       if (!usingFrontCamera) {
         usingFrontCamera = true;
+        preferredVideoDeviceId = null;
         console.log('Revertendo para câmera frontal...');
         await new Promise(resolve => setTimeout(resolve, 500));
         await startCamera();
@@ -325,6 +365,7 @@ async function startCamera() {
       // Tentar novamente com restrições menores
       if (!usingFrontCamera) {
         usingFrontCamera = true;
+        preferredVideoDeviceId = null;
         console.log('Revertendo para câmera frontal...');
         await new Promise(resolve => setTimeout(resolve, 500));
         await startCamera();
@@ -334,6 +375,7 @@ async function startCamera() {
       errorMsg = '⚠️ TIMEOUT\n\nA câmera demorou muito para responder. Tentando novamente...';
       if (!usingFrontCamera) {
         usingFrontCamera = true;
+        preferredVideoDeviceId = null;
         console.log('Timeout na câmera traseira. Voltando para frontal...');
         await new Promise(resolve => setTimeout(resolve, 500));
         await startCamera();
@@ -363,7 +405,18 @@ switchCameraBtn.onclick = async () => {
   setButtonsDisabledDuringProcess(true);
   showLoading();
   
-  usingFrontCamera = !usingFrontCamera;
+  await refreshVideoInputDevices();
+  if (availableVideoInputIds.length > 1) {
+    const currentIndex = availableVideoInputIds.indexOf(preferredVideoDeviceId);
+    const nextIndex = currentIndex >= 0
+      ? (currentIndex + 1) % availableVideoInputIds.length
+      : 0;
+    preferredVideoDeviceId = availableVideoInputIds[nextIndex];
+    usingFrontCamera = !usingFrontCamera;
+  } else {
+    preferredVideoDeviceId = null;
+    usingFrontCamera = !usingFrontCamera;
+  }
   console.log('Trocando câmera para:', usingFrontCamera ? 'Frontal' : 'Traseira');
   
   await startCamera();
