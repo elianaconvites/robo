@@ -277,6 +277,25 @@ distribuição ou utilização comercial deste código, total ou parcial, sem au
       stopRecordBtn.disabled = disabled;
     }
 
+    function getPreferredCameraDeviceId(devices, preferFrontCamera) {
+      const videoInputs = devices.filter((d) => d.kind === 'videoinput');
+      if (!videoInputs.length) return null;
+
+      const frontRegex = /(front|user|frontal|face)/i;
+      const backRegex = /(back|rear|traseira|environment|world)/i;
+
+      if (preferFrontCamera) {
+        const front = videoInputs.find((d) => frontRegex.test(d.label || ''));
+        return (front || videoInputs[0]).deviceId;
+      }
+
+      const back = videoInputs.find((d) => backRegex.test(d.label || ''));
+      if (back) return back.deviceId;
+
+      const nonFront = videoInputs.find((d) => !frontRegex.test(d.label || ''));
+      return (nonFront || videoInputs[0]).deviceId;
+    }
+
     async function startCamera() {
       if (mediaRecorder && mediaRecorder.state === 'recording') {
         mediaRecorder.stop();
@@ -289,8 +308,10 @@ distribuição ou utilização comercial deste código, total ou parcial, sem au
         height: { ideal: 1080 }
       };
 
+      let nextStream = null;
+
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
+        nextStream = await navigator.mediaDevices.getUserMedia({
           video: {
             ...baseVideoConstraints,
             facingMode: { exact: usingFrontCamera ? 'user' : 'environment' }
@@ -298,7 +319,7 @@ distribuição ou utilização comercial deste código, total ou parcial, sem au
           audio: true
         });
       } catch (err) {
-        stream = await navigator.mediaDevices.getUserMedia({
+        nextStream = await navigator.mediaDevices.getUserMedia({
           video: {
             ...baseVideoConstraints,
             facingMode: usingFrontCamera ? 'user' : 'environment'
@@ -306,6 +327,27 @@ distribuição ou utilização comercial deste código, total ou parcial, sem au
           audio: true
         });
       }
+
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const preferredDeviceId = getPreferredCameraDeviceId(devices, usingFrontCamera);
+        const activeDeviceId = nextStream?.getVideoTracks?.()[0]?.getSettings?.()?.deviceId;
+
+        if (preferredDeviceId && preferredDeviceId !== activeDeviceId) {
+          nextStream.getTracks().forEach((track) => track.stop());
+          nextStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              ...baseVideoConstraints,
+              deviceId: { exact: preferredDeviceId }
+            },
+            audio: true
+          });
+        }
+      } catch (err) {
+        // Mantém o stream já aberto caso não seja possível reabrir por deviceId.
+      }
+
+      stream = nextStream;
 
       video.srcObject = stream;
       video.style.transform = usingFrontCamera ? 'scaleX(-1)' : 'scaleX(1)';
