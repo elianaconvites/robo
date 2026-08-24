@@ -311,21 +311,34 @@ distribuição ou utilização comercial deste código, total ou parcial, sem au
       let nextStream = null;
 
       try {
-        nextStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            ...baseVideoConstraints,
-            facingMode: { exact: usingFrontCamera ? 'user' : 'environment' }
-          },
-          audio: true
-        });
-      } catch (err) {
-        nextStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            ...baseVideoConstraints,
-            facingMode: usingFrontCamera ? 'user' : 'environment'
-          },
-          audio: true
-        });
+        try {
+          nextStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              ...baseVideoConstraints,
+              facingMode: { exact: usingFrontCamera ? 'user' : 'environment' }
+            },
+            audio: true
+          });
+        } catch (err) {
+          try {
+            nextStream = await navigator.mediaDevices.getUserMedia({
+              video: {
+                ...baseVideoConstraints,
+                facingMode: usingFrontCamera ? 'user' : 'environment'
+              },
+              audio: true
+            });
+          } catch (fallbackErr) {
+            nextStream = await navigator.mediaDevices.getUserMedia({
+              video: baseVideoConstraints,
+              audio: true
+            });
+          }
+        }
+      } catch (cameraErr) {
+        console.error('Erro ao abrir câmera:', cameraErr);
+        alert('Não foi possível abrir a câmera. Verifique as permissões do navegador.');
+        return;
       }
 
       try {
