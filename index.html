@@ -249,7 +249,7 @@ distribuição ou utilização comercial deste código, total ou parcial, sem au
 
     const loadingMessage = document.getElementById('loading-message');
 
-    let usingFrontCamera = true;
+    let usingFrontCamera = false;
     let stream;
 
     let mediaRecorder = null;
@@ -283,15 +283,30 @@ distribuição ou utilização comercial deste código, total ou parcial, sem au
       }
 
       if (stream) stream.getTracks().forEach(track => track.stop());
-      const constraints = {
-        video: {
-          facingMode: usingFrontCamera ? 'user' : 'environment',
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        },
-        audio: true
+
+      const baseVideoConstraints = {
+        width: { ideal: 1920 },
+        height: { ideal: 1080 }
       };
-      stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            ...baseVideoConstraints,
+            facingMode: { exact: usingFrontCamera ? 'user' : 'environment' }
+          },
+          audio: true
+        });
+      } catch (err) {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            ...baseVideoConstraints,
+            facingMode: usingFrontCamera ? 'user' : 'environment'
+          },
+          audio: true
+        });
+      }
+
       video.srcObject = stream;
       video.style.transform = usingFrontCamera ? 'scaleX(-1)' : 'scaleX(1)';
       overlay.style.transform = 'scaleX(1)';
