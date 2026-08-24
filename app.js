@@ -214,7 +214,7 @@ let recordedMimeType = 'video/webm';
 let lastVideoUrl = null;
 let frameInterval = null;
 let isChangingCamera = false;
-let availableVideoInputIds = [];
+let availableVideoInputs = [];
 let preferredVideoDeviceId = null;
 let micStream = null;
 
@@ -255,14 +255,62 @@ function stopAllRecording() {
 
 async function refreshVideoInputDevices() {
   if (!navigator.mediaDevices?.enumerateDevices) {
-    availableVideoInputIds = [];
+    availableVideoInputs = [];
     return;
   }
 
   const devices = await navigator.mediaDevices.enumerateDevices();
-  availableVideoInputIds = devices
-    .filter(device => device.kind === 'videoinput' && device.deviceId)
-    .map(device => device.deviceId);
+  availableVideoInputs = devices
+    .filter(device => device.kind === 'videoinput' && device.deviceId);
+}
+
+function inferIsFrontCameraByLabel(label) {
+  if (!label) return null;
+  const normalized = label.toLowerCase();
+  if (
+    normalized.includes('front') ||
+    normalized.includes('frontal') ||
+    normalized.includes('user')
+  ) {
+    return true;
+  }
+  if (
+    normalized.includes('back') ||
+    normalized.includes('rear') ||
+    normalized.includes('traseira') ||
+    normalized.includes('environment')
+  ) {
+    return false;
+  }
+  return null;
+}
+
+async function requestMicrophoneStreamWithTimeout(timeoutMs = 5000) {
+  const micPromise = navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      settled = true;
+      reject(new Error('Timeout ao acessar microfone'));
+    }, timeoutMs);
+
+    micPromise
+      .then(streamResult => {
+        if (settled) {
+          streamResult.getTracks().forEach(track => track.stop());
+          return;
+        }
+        clearTimeout(timer);
+        settled = true;
+        resolve(streamResult);
+      })
+      .catch(err => {
+        if (settled) return;
+        clearTimeout(timer);
+        settled = true;
+        reject(err);
+      });
+  });
 }
 
 function buildCameraConstraints() {
@@ -285,13 +333,7 @@ async function getRecordingAudioTrack() {
   }
 
   try {
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Timeout ao acessar microfone')), 5000)
-    );
-    micStream = await Promise.race([
-      navigator.mediaDevices.getUserMedia({ audio: true, video: false }),
-      timeoutPromise
-    ]);
+    micStream = await requestMicrophoneStreamWithTimeout(5000);
     return micStream.getAudioTracks()[0] || null;
   } catch (err) {
     console.warn('Microfone indisponível, gravação seguirá sem áudio:', err);
@@ -354,10 +396,10 @@ async function startCamera() {
 
     if (currentDeviceId) {
       preferredVideoDeviceId = currentDeviceId;
-      if (availableVideoInputIds.includes(currentDeviceId)) {
-        availableVideoInputIds = [
-          currentDeviceId,
-          ...availableVideoInputIds.filter(deviceId => deviceId !== currentDeviceId)
+      if (availableVideoInputs.some(device => device.deviceId === currentDeviceId)) {
+        availableVideoInputs = [
+          ...availableVideoInputs.filter(device => device.deviceId === currentDeviceId),
+          ...availableVideoInputs.filter(device => device.deviceId !== currentDeviceId)
         ];
       }
     }
@@ -439,12 +481,21 @@ switchCameraBtn.onclick = async () => {
   showLoading();
   
   await refreshVideoInputDevices();
-  if (availableVideoInputIds.length > 1) {
-    const currentIndex = availableVideoInputIds.indexOf(preferredVideoDeviceId);
+  if (availableVideoInputs.length > 1) {
+    const currentIndex = availableVideoInputs.findIndex(
+      device => device.deviceId === preferredVideoDeviceId
+    );
     const nextIndex = currentIndex >= 0
-      ? (currentIndex + 1) % availableVideoInputIds.length
+      ? (currentIndex + 1) % availableVideoInputs.length
       : 0;
-    preferredVideoDeviceId = availableVideoInputIds[nextIndex];
+    const nextDevice = availableVideoInputs[nextIndex];
+    preferredVideoDeviceId = nextDevice.deviceId;
+    const inferredIsFront = inferIsFrontCameraByLabel(nextDevice.label);
+    if (inferredIsFront !== null) {
+      usingFrontCamera = inferredIsFront;
+    } else {
+      usingFrontCamera = !usingFrontCamera;
+    }
   } else {
     preferredVideoDeviceId = null;
     usingFrontCamera = !usingFrontCamera;
