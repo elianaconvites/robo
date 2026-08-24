@@ -260,13 +260,17 @@ async function refreshVideoInputDevices() {
   }
 
   const devices = await navigator.mediaDevices.enumerateDevices();
-  availableVideoInputs = devices
-    .filter(device => (
-      device.kind === 'videoinput' &&
-      device.deviceId &&
-      device.deviceId !== 'default' &&
-      device.deviceId !== 'communications'
-    ));
+  const videoInputs = devices.filter(device => (
+    device.kind === 'videoinput' &&
+    device.deviceId
+  ));
+
+  const specificInputs = videoInputs.filter(
+    device => device.deviceId !== 'default' && device.deviceId !== 'communications'
+  );
+
+  // Em alguns navegadores mobile só há IDs genéricos disponíveis.
+  availableVideoInputs = specificInputs.length ? specificInputs : videoInputs;
 }
 
 function inferIsFrontCameraByLabel(label) {
@@ -307,7 +311,9 @@ function pickVideoInputForTargetCamera(targetIsFrontCamera) {
     return devicesMatchingTarget[0];
   }
 
-  if (!currentDeviceId) return null;
+  if (!currentDeviceId) {
+    return availableVideoInputs[0];
+  }
 
   const currentIndex = availableVideoInputs.findIndex(
     device => device.deviceId === currentDeviceId
@@ -360,6 +366,86 @@ function buildCameraConstraints() {
   };
 }
 
+function buildCameraFallbackConstraints() {
+  const targetFacingMode = usingFrontCamera ? 'user' : 'environment';
+  const fallbackConstraints = [];
+
+  fallbackConstraints.push(buildCameraConstraints());
+
+  if (preferredVideoDeviceId) {
+    fallbackConstraints.push({
+      video: {
+        facingMode: targetFacingMode,
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
+      audio: false
+    });
+  }
+
+  fallbackConstraints.push(
+    { video: { facingMode: targetFacingMode }, audio: false },
+    { video: true, audio: false }
+  );
+
+  const seen = new Set();
+  return fallbackConstraints.filter(constraints => {
+    const key = JSON.stringify(constraints);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+async function requestCameraStreamWithTimeout(constraints, timeoutMs = 7000) {
+  const cameraPromise = navigator.mediaDevices.getUserMedia(constraints);
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      const timeoutError = new Error('Timeout ao acessar câmera');
+      timeoutError.name = 'TimeoutError';
+      reject(timeoutError);
+    }, timeoutMs);
+
+    cameraPromise
+      .then(streamResult => {
+        if (settled) {
+          streamResult.getTracks().forEach(track => track.stop());
+          return;
+        }
+        clearTimeout(timer);
+        settled = true;
+        resolve(streamResult);
+      })
+      .catch(err => {
+        if (settled) return;
+        clearTimeout(timer);
+        settled = true;
+        reject(err);
+      });
+  });
+}
+
+async function getCameraStreamWithFallbacks() {
+  const attempts = buildCameraFallbackConstraints();
+  let lastError = null;
+
+  for (let i = 0; i < attempts.length; i++) {
+    const constraints = attempts[i];
+    try {
+      console.log(`Tentativa de câmera ${i + 1}/${attempts.length}:`, constraints);
+      return await requestCameraStreamWithTimeout(constraints);
+    } catch (err) {
+      lastError = err;
+      console.warn(`Falha na tentativa de câmera ${i + 1}:`, err);
+    }
+  }
+
+  throw lastError || new Error('Não foi possível iniciar a câmera');
+}
+
 async function attachStreamToVideoElement(videoElement, mediaStream) {
   videoElement.autoplay = true;
   videoElement.muted = true;
@@ -375,6 +461,8 @@ async function attachStreamToVideoElement(videoElement, mediaStream) {
   videoElement.srcObject = mediaStream;
 
   if (videoElement.readyState < HTMLMediaElement.HAVE_METADATA) {
+    // Alguns navegadores mobile podem demorar para emitir metadata/canplay.
+    // Limitamos a espera para evitar travas perceptíveis na abertura da câmera.
     await new Promise((resolve, reject) => {
       let settled = false;
       const timeoutId = setTimeout(() => {
@@ -413,6 +501,7 @@ async function attachStreamToVideoElement(videoElement, mediaStream) {
     try {
       await playPromise;
     } catch (err) {
+      // AbortError pode ocorrer durante troca rápida de stream; ignoramos esse caso.
       if (err.name !== 'AbortError') {
         throw err;
       }
@@ -458,20 +547,9 @@ async function startCamera() {
     stream.getTracks().forEach(track => track.stop());
   }
 
-  const constraints = buildCameraConstraints();
-
   try {
     console.log('Solicitando acesso à câmera...');
-    
-    // Timeout de 10 segundos para evitar travamento
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Timeout ao acessar câmera')), 10000)
-    );
-    
-    stream = await Promise.race([
-      navigator.mediaDevices.getUserMedia(constraints),
-      timeoutPromise
-    ]);
+    stream = await getCameraStreamWithFallbacks();
     
     console.log('✅ Câmera iniciada com sucesso!');
     console.log('Usando câmera:', usingFrontCamera ? 'Frontal' : 'Traseira');
@@ -512,36 +590,13 @@ async function startCamera() {
     if (err.name === 'NotAllowedError') {
       errorMsg = '⚠️ PERMISSÃO NEGADA\n\nVocê negou acesso à câmera. Verifique as permissões do navegador e recarregue a página.';
     } else if (err.name === 'NotFoundError') {
-      errorMsg = '⚠️ CÂMERA NÃO ENCONTRADA\n\nNenhuma câmera traseira foi detectada. Usando câmera frontal.';
-      // Voltar para câmera frontal se traseira não existir
-      if (!usingFrontCamera) {
-        usingFrontCamera = true;
-        preferredVideoDeviceId = null;
-        console.log('Revertendo para câmera frontal...');
-        await new Promise(resolve => setTimeout(resolve, 500));
-        return startCamera();
-      }
+      errorMsg = '⚠️ CÂMERA NÃO ENCONTRADA\n\nNenhuma câmera compatível foi detectada neste dispositivo.';
     } else if (err.name === 'NotReadableError') {
       errorMsg = '⚠️ CÂMERA OCUPADA\n\nOutra aplicação está usando a câmera. Feche outros apps e recarregue.';
     } else if (err.name === 'OverconstrainedError') {
-      errorMsg = '⚠️ CÂMERA INDISPONÍVEL\n\nO navegador não conseguiu acessar uma câmera com as configurações. Tentando novamente...';
-      // Tentar novamente com restrições menores
-      if (!usingFrontCamera) {
-        usingFrontCamera = true;
-        preferredVideoDeviceId = null;
-        console.log('Revertendo para câmera frontal...');
-        await new Promise(resolve => setTimeout(resolve, 500));
-        return startCamera();
-      }
-    } else if (err.message === 'Timeout ao acessar câmera') {
-      errorMsg = '⚠️ TIMEOUT\n\nA câmera demorou muito para responder. Tentando novamente...';
-      if (!usingFrontCamera) {
-        usingFrontCamera = true;
-        preferredVideoDeviceId = null;
-        console.log('Timeout na câmera traseira. Voltando para frontal...');
-        await new Promise(resolve => setTimeout(resolve, 500));
-        return startCamera();
-      }
+      errorMsg = '⚠️ CÂMERA INDISPONÍVEL\n\nO navegador não conseguiu acessar uma câmera com as configurações solicitadas.';
+    } else if (err.name === 'TimeoutError') {
+      errorMsg = '⚠️ TIMEOUT\n\nA câmera demorou muito para responder. Tente novamente.';
     } else {
       errorMsg = `⚠️ ERRO NA CÂMERA\n\n${err.message || 'Erro desconhecido ao acessar a câmera.'}`;
     }
