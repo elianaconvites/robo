@@ -342,11 +342,16 @@ async function attachStreamToVideoElement(videoElement, mediaStream) {
 
   if (videoElement.readyState < HTMLMediaElement.HAVE_METADATA) {
     await new Promise((resolve, reject) => {
+      let settled = false;
       const onLoaded = () => {
+        if (settled) return;
+        settled = true;
         cleanup();
         resolve();
       };
       const onError = () => {
+        if (settled) return;
+        settled = true;
         cleanup();
         reject(new Error('Não foi possível carregar o vídeo da câmera.'));
       };
@@ -356,9 +361,9 @@ async function attachStreamToVideoElement(videoElement, mediaStream) {
         videoElement.removeEventListener('error', onError);
       };
 
-      videoElement.addEventListener('loadedmetadata', onLoaded, { once: true });
-      videoElement.addEventListener('canplay', onLoaded, { once: true });
-      videoElement.addEventListener('error', onError, { once: true });
+      videoElement.addEventListener('loadedmetadata', onLoaded);
+      videoElement.addEventListener('canplay', onLoaded);
+      videoElement.addEventListener('error', onError);
     });
   }
 
