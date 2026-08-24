@@ -326,6 +326,54 @@ function buildCameraConstraints() {
   };
 }
 
+async function attachStreamToVideoElement(videoElement, mediaStream) {
+  videoElement.autoplay = true;
+  videoElement.muted = true;
+  videoElement.playsInline = true;
+  videoElement.setAttribute('playsinline', '');
+  videoElement.setAttribute('webkit-playsinline', '');
+
+  if (videoElement.srcObject && videoElement.srcObject !== mediaStream) {
+    videoElement.pause();
+    videoElement.srcObject = null;
+  }
+
+  videoElement.srcObject = mediaStream;
+
+  if (videoElement.readyState < HTMLMediaElement.HAVE_METADATA) {
+    await new Promise((resolve, reject) => {
+      const onLoaded = () => {
+        cleanup();
+        resolve();
+      };
+      const onError = () => {
+        cleanup();
+        reject(new Error('Não foi possível carregar o vídeo da câmera.'));
+      };
+      const cleanup = () => {
+        videoElement.removeEventListener('loadedmetadata', onLoaded);
+        videoElement.removeEventListener('canplay', onLoaded);
+        videoElement.removeEventListener('error', onError);
+      };
+
+      videoElement.addEventListener('loadedmetadata', onLoaded, { once: true });
+      videoElement.addEventListener('canplay', onLoaded, { once: true });
+      videoElement.addEventListener('error', onError, { once: true });
+    });
+  }
+
+  const playPromise = videoElement.play();
+  if (playPromise) {
+    try {
+      await playPromise;
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        throw err;
+      }
+    }
+  }
+}
+
 async function getRecordingAudioTrack() {
   if (micStream) {
     const existingTrack = micStream.getAudioTracks()[0];
@@ -382,7 +430,7 @@ async function startCamera() {
     console.log('✅ Câmera iniciada com sucesso!');
     console.log('Usando câmera:', usingFrontCamera ? 'Frontal' : 'Traseira');
     
-    video.srcObject = stream;
+    await attachStreamToVideoElement(video, stream);
     const currentTrack = stream.getVideoTracks()[0];
     const currentSettings = currentTrack?.getSettings?.() || {};
     const currentFacingMode = currentSettings.facingMode;
