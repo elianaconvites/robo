@@ -216,6 +216,7 @@ let frameInterval = null;
 let isChangingCamera = false;
 let availableVideoInputIds = [];
 let preferredVideoDeviceId = null;
+let micStream = null;
 
 const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 const API_URL = "https://video-converter-api-production-bb8e.up.railway.app/convert";
@@ -264,6 +265,46 @@ async function refreshVideoInputDevices() {
     .map(device => device.deviceId);
 }
 
+function buildCameraConstraints() {
+  return {
+    video: {
+      ...(preferredVideoDeviceId
+        ? { deviceId: { exact: preferredVideoDeviceId } }
+        : { facingMode: usingFrontCamera ? 'user' : 'environment' }),
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
+    },
+    audio: false
+  };
+}
+
+async function getRecordingAudioTrack() {
+  if (micStream) {
+    const existingTrack = micStream.getAudioTracks()[0];
+    if (existingTrack) return existingTrack;
+  }
+
+  try {
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Timeout ao acessar microfone')), 5000)
+    );
+    micStream = await Promise.race([
+      navigator.mediaDevices.getUserMedia({ audio: true, video: false }),
+      timeoutPromise
+    ]);
+    return micStream.getAudioTracks()[0] || null;
+  } catch (err) {
+    console.warn('Microfone indisponível, gravação seguirá sem áudio:', err);
+    return null;
+  }
+}
+
+function stopMicStream() {
+  if (!micStream) return;
+  micStream.getTracks().forEach(track => track.stop());
+  micStream = null;
+}
+
 // ===== CÂMERA =====
 async function startCamera() {
   console.log('Iniciando câmera...');
@@ -280,19 +321,8 @@ async function startCamera() {
   if (stream) {
     stream.getTracks().forEach(track => track.stop());
   }
-  
-  await refreshVideoInputDevices();
 
-  const constraints = {
-    video: {
-      ...(preferredVideoDeviceId
-        ? { deviceId: { exact: preferredVideoDeviceId } }
-        : { facingMode: usingFrontCamera ? 'user' : 'environment' }),
-      width: { ideal: 1920 },
-      height: { ideal: 1080 }
-    },
-    audio: true
-  };
+  const constraints = buildCameraConstraints();
 
   try {
     console.log('Solicitando acesso à câmera...');
@@ -335,6 +365,9 @@ async function startCamera() {
     video.style.transform = usingFrontCamera ? 'scaleX(-1)' : 'scaleX(1)';
     overlay.style.transform = 'scaleX(1)';
     video.style.background = 'transparent';
+    refreshVideoInputDevices().catch(err => {
+      console.warn('Não foi possível atualizar lista de câmeras:', err);
+    });
     
     // Esconder mensagem de erro
     document.getElementById('error-message').style.display = 'none';
@@ -513,7 +546,7 @@ function stopRecordingTimer() {
   recordingIndicator.style.display = 'none';
 }
 
-function startVideoRecording() {
+async function startVideoRecording() {
   if (!stream) {
     showError('Erro', 'Câmera não iniciada.');
     return;
@@ -609,6 +642,11 @@ function startVideoRecording() {
     const audioTracks = stream.getAudioTracks();
     if (audioTracks.length > 0) {
       combinedStream.addTrack(audioTracks[0]);
+    } else {
+      const micTrack = await getRecordingAudioTrack();
+      if (micTrack) {
+        combinedStream.addTrack(micTrack);
+      }
     }
 
     let options = {};
@@ -638,6 +676,7 @@ function startVideoRecording() {
       frameInterval = null;
       startRecordBtn.style.display = 'inline-block';
       stopRecordBtn.style.display = 'none';
+      stopMicStream();
       return;
     }
 
@@ -663,6 +702,7 @@ function startVideoRecording() {
         startRecordBtn.style.display = 'inline-block';
         stopRecordBtn.style.display = 'none';
         recordedChunks = [];
+        stopMicStream();
         return;
       }
 
@@ -720,6 +760,7 @@ function startVideoRecording() {
         startRecordBtn.style.display = 'inline-block';
         stopRecordBtn.style.display = 'none';
         recordedChunks = [];
+        stopMicStream();
       }
     };
 
