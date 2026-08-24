@@ -349,12 +349,12 @@ async function attachStreamToVideoElement(videoElement, mediaStream) {
         cleanup();
         reject(new Error('Tempo esgotado ao carregar o vídeo da câmera.'));
       }, 10000);
-      const cleanup = () => {
+      function cleanup() {
         clearTimeout(timeoutId);
         videoElement.removeEventListener('loadedmetadata', onLoaded);
         videoElement.removeEventListener('canplay', onLoaded);
         videoElement.removeEventListener('error', onError);
-      };
+      }
       const onLoaded = () => {
         if (settled) return;
         settled = true;
