@@ -285,6 +285,35 @@ function inferIsFrontCameraByLabel(label) {
   return null;
 }
 
+function getCurrentVideoDeviceId() {
+  return stream?.getVideoTracks?.()[0]?.getSettings?.().deviceId || preferredVideoDeviceId || null;
+}
+
+function pickVideoInputForTargetCamera(targetIsFrontCamera) {
+  if (!availableVideoInputs.length) return null;
+
+  const currentDeviceId = getCurrentVideoDeviceId();
+  const devicesMatchingTarget = availableVideoInputs.filter(device => (
+    device.deviceId !== currentDeviceId &&
+    inferIsFrontCameraByLabel(device.label) === targetIsFrontCamera
+  ));
+
+  if (devicesMatchingTarget.length) {
+    return devicesMatchingTarget[0];
+  }
+
+  if (currentDeviceId) {
+    const currentIndex = availableVideoInputs.findIndex(
+      device => device.deviceId === currentDeviceId
+    );
+    if (currentIndex >= 0 && availableVideoInputs.length > 1) {
+      return availableVideoInputs[(currentIndex + 1) % availableVideoInputs.length];
+    }
+  }
+
+  return availableVideoInputs.find(device => device.deviceId !== currentDeviceId) || null;
+}
+
 async function requestMicrophoneStreamWithTimeout(timeoutMs = 5000) {
   const micPromise = navigator.mediaDevices.getUserMedia({ audio: true, video: false });
   return new Promise((resolve, reject) => {
@@ -456,12 +485,6 @@ async function startCamera() {
 
     if (currentDeviceId) {
       preferredVideoDeviceId = currentDeviceId;
-      if (availableVideoInputs.some(device => device.deviceId === currentDeviceId)) {
-        availableVideoInputs = [
-          ...availableVideoInputs.filter(device => device.deviceId === currentDeviceId),
-          ...availableVideoInputs.filter(device => device.deviceId !== currentDeviceId)
-        ];
-      }
     }
 
     video.style.transform = usingFrontCamera ? 'scaleX(-1)' : 'scaleX(1)';
@@ -541,24 +564,14 @@ switchCameraBtn.onclick = async () => {
   showLoading();
   
   await refreshVideoInputDevices();
+  const targetIsFrontCamera = !usingFrontCamera;
   if (availableVideoInputs.length > 1) {
-    const currentIndex = availableVideoInputs.findIndex(
-      device => device.deviceId === preferredVideoDeviceId
-    );
-    const nextIndex = currentIndex >= 0
-      ? (currentIndex + 1) % availableVideoInputs.length
-      : 0;
-    const nextDevice = availableVideoInputs[nextIndex];
-    preferredVideoDeviceId = nextDevice.deviceId;
-    const inferredIsFront = inferIsFrontCameraByLabel(nextDevice.label);
-    if (inferredIsFront !== null) {
-      usingFrontCamera = inferredIsFront;
-    } else {
-      usingFrontCamera = !usingFrontCamera;
-    }
+    const nextDevice = pickVideoInputForTargetCamera(targetIsFrontCamera);
+    preferredVideoDeviceId = nextDevice?.deviceId || null;
+    usingFrontCamera = targetIsFrontCamera;
   } else {
     preferredVideoDeviceId = null;
-    usingFrontCamera = !usingFrontCamera;
+    usingFrontCamera = targetIsFrontCamera;
   }
   console.log('Trocando câmera para:', usingFrontCamera ? 'Frontal' : 'Traseira');
   
