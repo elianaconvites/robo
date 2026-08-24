@@ -347,14 +347,15 @@ distribuição ou utilização comercial deste código, total ou parcial, sem au
         const activeDeviceId = nextStream?.getVideoTracks?.()[0]?.getSettings?.()?.deviceId;
 
         if (preferredDeviceId && preferredDeviceId !== activeDeviceId) {
-          nextStream.getTracks().forEach((track) => track.stop());
-          nextStream = await navigator.mediaDevices.getUserMedia({
+          const replacementStream = await navigator.mediaDevices.getUserMedia({
             video: {
               ...baseVideoConstraints,
               deviceId: { exact: preferredDeviceId }
             },
             audio: true
           });
+          nextStream.getTracks().forEach((track) => track.stop());
+          nextStream = replacementStream;
         }
       } catch (err) {
         // Mantém o stream já aberto caso não seja possível reabrir por deviceId.
