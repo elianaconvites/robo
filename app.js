@@ -307,16 +307,14 @@ function pickVideoInputForTargetCamera(targetIsFrontCamera) {
     return devicesMatchingTarget[0];
   }
 
-  if (currentDeviceId) {
-    const currentIndex = availableVideoInputs.findIndex(
-      device => device.deviceId === currentDeviceId
-    );
-    if (currentIndex >= 0 && availableVideoInputs.length > 1) {
-      return availableVideoInputs[(currentIndex + 1) % availableVideoInputs.length];
-    }
-  }
-
   if (!currentDeviceId) return null;
+
+  const currentIndex = availableVideoInputs.findIndex(
+    device => device.deviceId === currentDeviceId
+  );
+  if (currentIndex >= 0 && availableVideoInputs.length > 1) {
+    return availableVideoInputs[(currentIndex + 1) % availableVideoInputs.length];
+  }
 
   return availableVideoInputs.find(device => device.deviceId !== currentDeviceId) || null;
 }
@@ -504,6 +502,7 @@ async function startCamera() {
     // Esconder mensagem de erro
     document.getElementById('error-message').style.display = 'none';
     isChangingCamera = false;
+    return true;
     
   } catch (err) {
     console.error('❌ Erro ao acessar câmera:', err);
@@ -520,8 +519,7 @@ async function startCamera() {
         preferredVideoDeviceId = null;
         console.log('Revertendo para câmera frontal...');
         await new Promise(resolve => setTimeout(resolve, 500));
-        await startCamera();
-        return;
+        return startCamera();
       }
     } else if (err.name === 'NotReadableError') {
       errorMsg = '⚠️ CÂMERA OCUPADA\n\nOutra aplicação está usando a câmera. Feche outros apps e recarregue.';
@@ -533,8 +531,7 @@ async function startCamera() {
         preferredVideoDeviceId = null;
         console.log('Revertendo para câmera frontal...');
         await new Promise(resolve => setTimeout(resolve, 500));
-        await startCamera();
-        return;
+        return startCamera();
       }
     } else if (err.message === 'Timeout ao acessar câmera') {
       errorMsg = '⚠️ TIMEOUT\n\nA câmera demorou muito para responder. Tentando novamente...';
@@ -543,8 +540,7 @@ async function startCamera() {
         preferredVideoDeviceId = null;
         console.log('Timeout na câmera traseira. Voltando para frontal...');
         await new Promise(resolve => setTimeout(resolve, 500));
-        await startCamera();
-        return;
+        return startCamera();
       }
     } else {
       errorMsg = `⚠️ ERRO NA CÂMERA\n\n${err.message || 'Erro desconhecido ao acessar a câmera.'}`;
@@ -552,6 +548,7 @@ async function startCamera() {
     
     showError('Erro ao acessar câmera', errorMsg);
     isChangingCamera = false;
+    return false;
   }
 }
 
@@ -572,6 +569,8 @@ switchCameraBtn.onclick = async () => {
   
   await refreshVideoInputDevices();
   const targetIsFrontCamera = !usingFrontCamera;
+  const previousUsingFrontCamera = usingFrontCamera;
+  const previousPreferredVideoDeviceId = preferredVideoDeviceId;
   if (availableVideoInputs.length > 1) {
     const nextDevice = pickVideoInputForTargetCamera(targetIsFrontCamera);
     preferredVideoDeviceId = nextDevice?.deviceId || null;
@@ -582,7 +581,11 @@ switchCameraBtn.onclick = async () => {
   }
   console.log('Trocando câmera para:', usingFrontCamera ? 'Frontal' : 'Traseira');
   
-  await startCamera();
+  const started = await startCamera();
+  if (!started) {
+    usingFrontCamera = previousUsingFrontCamera;
+    preferredVideoDeviceId = previousPreferredVideoDeviceId;
+  }
   
   hideLoading();
   setButtonsDisabledDuringProcess(false);
