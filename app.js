@@ -469,6 +469,10 @@ async function attachStreamToVideoElement(videoElement, mediaStream) {
         if (settled) return;
         settled = true;
         cleanup();
+        mediaStream.getTracks().forEach(track => track.stop());
+        if (videoElement.srcObject === mediaStream) {
+          videoElement.srcObject = null;
+        }
         reject(new Error('Tempo esgotado ao carregar o vídeo da câmera.'));
       }, 10000);
       function cleanup() {
@@ -487,6 +491,10 @@ async function attachStreamToVideoElement(videoElement, mediaStream) {
         if (settled) return;
         settled = true;
         cleanup();
+        mediaStream.getTracks().forEach(track => track.stop());
+        if (videoElement.srcObject === mediaStream) {
+          videoElement.srcObject = null;
+        }
         reject(new Error('Não foi possível carregar o vídeo da câmera.'));
       };
 
@@ -513,6 +521,7 @@ async function getRecordingAudioTrack() {
   if (micStream) {
     const existingTrack = micStream.getAudioTracks()[0];
     if (existingTrack && existingTrack.readyState === 'live') return existingTrack;
+    stopMicStream();
   }
 
   try {
@@ -584,6 +593,10 @@ async function startCamera() {
     
   } catch (err) {
     console.error('❌ Erro ao acessar câmera:', err);
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      stream = null;
+    }
     
     let errorMsg = '';
     
@@ -623,17 +636,23 @@ switchCameraBtn.onclick = async () => {
   showLoading();
   
   await refreshVideoInputDevices();
+  if (availableVideoInputs.length === 1) {
+    hideLoading();
+    setButtonsDisabledDuringProcess(false);
+    isChangingCamera = false;
+    showError('Aviso', 'Apenas uma câmera foi detectada neste dispositivo.');
+    return;
+  }
+  if (availableVideoInputs.length === 0) {
+    console.log('Nenhuma câmera listada via enumerateDevices; tentando troca por facingMode.');
+  }
+
   const targetIsFrontCamera = !usingFrontCamera;
   const previousUsingFrontCamera = usingFrontCamera;
   const previousPreferredVideoDeviceId = preferredVideoDeviceId;
-  if (availableVideoInputs.length > 1) {
-    const nextDevice = pickVideoInputForTargetCamera(targetIsFrontCamera);
-    preferredVideoDeviceId = nextDevice?.deviceId || null;
-    usingFrontCamera = targetIsFrontCamera;
-  } else {
-    preferredVideoDeviceId = null;
-    usingFrontCamera = targetIsFrontCamera;
-  }
+  const nextDevice = pickVideoInputForTargetCamera(targetIsFrontCamera);
+  preferredVideoDeviceId = nextDevice?.deviceId || null;
+  usingFrontCamera = targetIsFrontCamera;
   console.log('Trocando câmera para:', usingFrontCamera ? 'Frontal' : 'Traseira');
   
   const started = await startCamera();
